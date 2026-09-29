@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>参数化花瓶造型实验室 · Three.js</title>
+<style>
+  :root{ --bg:#0e1117; --panel:#161b24; --line:#2a3342; --txt:#e8ecf3; --sub:#8b96a8; --acc:#5aa9ff; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;overflow:hidden;}
+  #stage{position:fixed;top:0;left:0;right:0;height:100%;}
+  canvas{display:block;}
+  /* ---------- 顶部标题 ---------- */
+  #head{position:fixed;top:0;left:0;right:0;padding:10px 14px;pointer-events:none;
+    background:linear-gradient(#000a,transparent);z-index:5;}
+  #head h1{font-size:15px;margin:0;font-weight:600;letter-spacing:1px;}
+  #head p{margin:2px 0 0;font-size:11px;color:var(--sub);}
+  /* ---------- 底部参数面板（桌面右侧 / 手机底部抽屉） ---------- */
+  #panel{position:fixed;z-index:10;background:var(--panel);border:1px solid var(--line);
+    display:flex;flex-direction:column;}
+  #phead{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:4px 2px 8px;border-bottom:1px solid var(--line);margin-bottom:6px;}
+  #phead span{font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #phead button{border:1px solid var(--line);background:#1d2430;color:var(--txt);
+    border-radius:8px;padding:6px 14px;font-size:12px;white-space:nowrap;flex-shrink:0;}
+  #panel.collapsed #scroll{display:none;}
+  @media(min-width:761px){
+    #panel{top:12px;right:12px;bottom:12px;width:302px;border-radius:14px;padding:14px;}
+  }
+  @media(max-width:760px){
+    /* 上下结构：上方 3D 视图，下方参数面板，打开页面即可见 */
+    #panel{top:46%;left:0;right:0;bottom:0;max-height:none;border-radius:0;
+      border-left:none;border-right:none;border-bottom:none;
+      padding:8px 14px calc(8px + env(safe-area-inset-bottom));}
+    #panel.collapsed{top:auto;height:auto;border-radius:14px 14px 0 0;
+      left:10px;right:10px;box-shadow:0 -6px 24px #000a;}
+  }
+  #panel h2{font-size:12px;color:var(--sub);margin:10px 0 6px;text-transform:uppercase;letter-spacing:1px;}
+  #scroll{overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;padding-right:2px;}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{border:1px solid var(--line);background:#1d2430;color:var(--txt);border-radius:999px;
+    padding:5px 11px;font-size:12px;cursor:pointer;}
+  .chip.on{background:var(--acc);border-color:var(--acc);color:#06121f;font-weight:600;}
+  .row{display:grid;grid-template-columns:86px 1fr 44px;align-items:center;gap:8px;margin:5px 0;}
+  .row label{font-size:12px;color:var(--sub);white-space:nowrap;}
+  .row output{font-size:11px;color:var(--txt);text-align:right;font-variant-numeric:tabular-nums;}
+  input[type=range]{width:100%;height:26px;margin:0;accent-color:var(--acc);}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+  .btn{flex:1;min-width:78px;border:1px solid var(--line);background:#1d2430;color:var(--txt);
+    border-radius:10px;padding:9px 6px;font-size:12px;cursor:pointer;}
+  .btn.primary{background:var(--acc);border-color:var(--acc);color:#06121f;font-weight:600;}
+  #stat{font-size:11px;color:var(--sub);margin-top:10px;line-height:1.6;}
+  #fallback{display:none;position:fixed;inset:0;place-items:center;background:var(--bg);z-index:99;
+    text-align:center;padding:30px;font-size:14px;color:var(--sub);}
+  .colorRow{display:flex;gap:10px;align-items:center;margin:6px 0;font-size:12px;color:var(--sub);}
+  input[type=color]{width:44px;height:28px;border:1px solid var(--line);border-radius:8px;background:none;padding:0;}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage"></div>
+<div id="head">
+  <h1>参数化花瓶造型实验室</h1>
+  <p>母线插值 × 超椭圆截面 × 三角函数扰动 · 单指旋转 / 双指缩放</p>
+</div>
+<div id="panel">
+  <div id="phead"><span>🎛 参数化控制 · 12 组预设 / 15 个滑杆 / 一键导出 3D 文件</span><button id="collapse">▼ 收起面板</button></div>
+  <div id="scroll">
+    <h2>① 造型预设（12 组）</h2>
+    <div class="chips" id="presets"></div>
+    <h2>② 形态参数</h2>
+    <div id="sliders"></div>
+    <h2>③ 材质</h2>
+    <div class="colorRow">釉色 <input type="color" id="color" value="#f5f0e6">
+      粗糙度 <input type="range" id="rough" min="0" max="1" step="0.01" value="0.35" style="flex:1"></div>
+    <h2>④ 导出 3D 文件</h2>
+    <div class="btns">
+      <button class="btn primary" id="expStl">导出 .STL</button>
+      <button class="btn primary" id="expGlb">导出 .GLB</button>
+      <button class="btn" id="expObj">导出 .OBJ</button>
+    </div>
+    <div class="btns">
+      <button class="btn" id="rand">🎲 随机灵感</button>
+      <button class="btn" id="wire">线框</button>
+      <button class="btn" id="reset">重置视角</button>
+    </div>
+    <div id="stat"></div>
+  </div>
+</div>
+<div id="fallback">当前浏览器无法加载 Three.js（需要支持 ES Module + WebGL）。<br>请使用较新的 Chrome / Safari / Edge，并保持联网。</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls }   from 'three/addons/controls/OrbitControls.js';
+import { GLTFExporter }    from 'three/addons/exporters/GLTFExporter.js';
+import { STLExporter }     from 'three/addons/exporters/STLExporter.js';
+import { OBJExporter }     from 'three/addons/exporters/OBJExporter.js';
+
+/* ================= 1. 参数定义 ================= */
+const P = { // 默认值（玉壶春瓶）
+  H:300, R:88, bellyPos:0.40, neckStart:0.66, neckR:30, mouthR:38,
+  flare:1.9, footR:28, bulge:0.0,
+  sectionN:2, ribs:0, ribAmp:0.10, twist:0, waveFreq:0, waveAmp:0.0
+};
+const DEFS = [
+  ['H','总高',120,420,1], ['R','腹径',30,150,1],
+  ['bellyPos','腹部位置',0.15,0.85,0.01], ['neckStart','颈部起点',0.3,0.98,0.01],
+  ['neckR','颈径',5,90,1], ['mouthR','口径',5,110,1],
+  ['flare','口沿外撇',0.5,3,0.01], ['footR','圈足半径',8,80,1],
+  ['bulge','双腹鼓出',0,1,0.01],
+  ['sectionN','截面指数 n',1,8,0.1],
+  ['ribs','棱脊数',0,24,1], ['ribAmp','棱脊深度',0,0.35,0.005],
+  ['twist','扭转圈数',0,3,0.01], ['waveFreq','波纹频率',0,12,0.1],
+  ['waveAmp','波纹幅度',0,0.2,0.005],
+];
+const PRESETS = {
+  '玉壶春瓶':{H:300,R:88,bellyPos:.40,neckStart:.66,neckR:30,mouthR:38,flare:1.9,footR:28,bulge:0,sectionN:2,ribs:0,ribAmp:.10,twist:0,waveFreq:0,waveAmp:0},
+  '梅瓶':{H:280,R:96,bellyPos:.46,neckStart:.74,neckR:20,mouthR:17,flare:1.0,footR:30,bulge:0,sectionN:2,ribs:0,ribAmp:.08,twist:0,waveFreq:0,waveAmp:0},
+  '天球瓶':{H:250,R:112,bellyPos:.52,neckStart:.86,neckR:30,mouthR:34,flare:1.15,footR:34,bulge:0,sectionN:2,ribs:0,ribAmp:.06,twist:0,waveFreq:0,waveAmp:0},
+  '葫芦瓶':{H:290,R:80,bellyPos:.30,neckStart:.78,neckR:24,mouthR:26,flare:1.3,footR:24,bulge:1,sectionN:2,ribs:0,ribAmp:.06,twist:0,waveFreq:0,waveAmp:0},
+  '蒜头瓶':{H:270,R:82,bellyPos:.48,neckStart:.72,neckR:14,mouthR:15,flare:1.35,footR:24,bulge:.55,sectionN:2,ribs:0,ribAmp:.07,twist:0,waveFreq:0,waveAmp:0},
+  '凤尾瓶':{H:350,R:80,bellyPos:.30,neckStart:.46,neckR:42,mouthR:52,flare:2.7,footR:26,bulge:0,sectionN:2,ribs:0,ribAmp:.06,twist:0,waveFreq:0,waveAmp:0},
+  '瓜棱瓶':{H:300,R:86,bellyPos:.42,neckStart:.68,neckR:28,mouthR:34,flare:1.6,footR:27,bulge:0,sectionN:2,ribs:10,ribAmp:.14,twist:0,waveFreq:0,waveAmp:0},
+  '四方倭角':{H:240,R:88,bellyPos:.50,neckStart:.60,neckR:68,mouthR:70,flare:1.05,footR:40,bulge:0,sectionN:4.5,ribs:0,ribAmp:0,twist:0,waveFreq:0,waveAmp:0},
+  '花觚':{H:380,R:70,bellyPos:.28,neckStart:.45,neckR:40,mouthR:44,flare:2.3,footR:30,bulge:0,sectionN:5,ribs:4,ribAmp:.07,twist:0,waveFreq:0,waveAmp:0},
+  '螺旋纹瓶':{H:300,R:84,bellyPos:.44,neckStart:.68,neckR:30,mouthR:36,flare:1.5,footR:26,bulge:0,sectionN:2,ribs:18,ribAmp:.10,twist:1.2,waveFreq:0,waveAmp:0},
+  '波纹瓶':{H:260,R:80,bellyPos:.50,neckStart:.80,neckR:34,mouthR:40,flare:1.3,footR:26,bulge:0,sectionN:2,ribs:0,ribAmp:0,twist:0,waveFreq:6,waveAmp:.08},
+  '萝卜瓶':{H:260,R:92,bellyPos:.26,neckStart:.52,neckR:46,mouthR:58,flare:1.6,footR:30,bulge:.2,sectionN:2,ribs:0,ribAmp:.07,twist:0,waveFreq:0,waveAmp:0},
+};
+
+/* ================= 2. 三维场景 ================= */
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); // 手机性能保护
+renderer.setSize(innerWidth, innerHeight);
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e1117);
+const camera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, 1, 4000);
+camera.position.set(260, 200, 340);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = .08;
+controls.target.set(0, 150, 0);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x334, 1.0));
+const d1 = new THREE.DirectionalLight(0xffffff, 1.6); d1.position.set(200,400,200); scene.add(d1);
+const d2 = new THREE.DirectionalLight(0x88aaff, 0.7); d2.position.set(-250,120,-150); scene.add(d2);
+const grid = new THREE.GridHelper(600, 24, 0x2a3342, 0x1a2230); grid.position.y = -1; scene.add(grid);
+
+const mat = new THREE.MeshStandardMaterial({color:0xf5f0e6, roughness:.35, metalness:.05, side:THREE.DoubleSide});
+let vase = null;
+
+/* ================= 3. 参数化造型核心 =================
+   花瓶曲面：先由控制点生成“母线”(Catmull-Rom 插值)，
+   再对每一点做三类数学变形：
+   ① 超椭圆截面：x = R·sgn(cosθ)|cosθ|^(2/n)  (n=2 圆，n→4 方)
+   ② 棱脊 + 扭转：R *= 1 + A·cos(kθ − 2π·twist·v)
+   ③ 竖向波纹：R *= 1 + B·sin(2π·f·v)                */
+function buildGeometry(){
+  const H=P.H, baseR=Math.max(P.neckR*1.15, P.R*0.55);
+  const pts=[[0,P.footR],[.015,P.footR*.72],[.07,P.footR*1.05],[.16,baseR],[P.bellyPos,P.R]];
+  if(P.bulge>0) pts.push([.68, P.neckR+(P.R*.95-P.neckR)*P.bulge]); // 双腹控制点
+  pts.push([(P.bellyPos+Math.min(P.neckStart,.97))/2, (P.R+P.neckR)/2*.9],
+            [P.neckStart,P.neckR],[.96,P.mouthR],[1,P.mouthR*P.flare]);
+  const curve=new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(p[1],p[0]*H,0)));
+  const PROFILE=160, SEG=128, prof=curve.getPoints(PROFILE);
+  const exp=2/P.sectionN;
+  const sgn=v=>v<0?-1:1;
+  const pos=new Float32Array((PROFILE+1)*(SEG+1)*3+3); // +1 个底部中心封底顶点
+  let i=0;
+  for(let r=0;r<=PROFILE;r++){
+    const v=r/PROFILE, R0=prof[r].x, y=prof[r].y;
+    const wave=1+P.waveAmp*Math.sin(2*Math.PI*P.waveFreq*v);
+    for(let s=0;s<=SEG;s++){
+      const th=s/SEG*2*Math.PI;
+      const rip=1+P.ribAmp*Math.cos(P.ribs*th-2*Math.PI*P.twist*v);
+      const R=R0*rip*wave;
+      pos[i++]=R*sgn(Math.cos(th))*Math.pow(Math.abs(Math.cos(th)),exp);
+      pos[i++]=y;
+      pos[i++]=R*sgn(Math.sin(th))*Math.pow(Math.abs(Math.sin(th)),exp);
+    }
+  }
+  // ---- 底部封底：中心点 + 三角形扇面（法线朝下，瓶底为实体）----
+  const CAP=(PROFILE+1)*(SEG+1);
+  pos[CAP*3]=0; pos[CAP*3+1]=prof[0].y; pos[CAP*3+2]=0;
+  const idx=[];
+  for(let s=0;s<SEG;s++) idx.push(CAP,s,s+1);           // 底部扇面
+  for(let r=0;r<PROFILE;r++) for(let s=0;s<SEG;s++){
+    const a=r*(SEG+1)+s, b=a+SEG+1;
+    idx.push(a,b,a+1, b,b+1,a+1);
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+function rebuild(){
+  const g=buildGeometry();
+  if(vase){ vase.geometry.dispose(); vase.geometry=g; }
+  else { vase=new THREE.Mesh(g,mat); scene.add(vase); }
+  document.getElementById('stat').innerHTML =
+    `顶点 ${g.attributes.position.count.toLocaleString()} · 面片 ${(g.index.count/3).toLocaleString()}<br>`+
+    `公式：母线 Catmull-Rom × 超椭圆(n=${P.sectionN}) × cos 棱脊/扭转 × sin 竖向波纹<br>底部实体封闭（扇形封底），可直接 3D 打印`; 
+}
+let timer=null;
+const lazy=()=>{clearTimeout(timer); timer=setTimeout(rebuild,60);};
+
+/* ================= 4. UI 生成 ================= */
+const sliders=document.getElementById('sliders'), outs={};
+DEFS.forEach(([k,label,min,max,step])=>{
+  const row=document.createElement('div'); row.className='row';
+  row.innerHTML=`<label>${label}</label>`;
+  const inp=document.createElement('input');
+  inp.type='range'; inp.min=min; inp.max=max; inp.step=step; inp.value=P[k];
+  const out=document.createElement('output'); out.textContent=P[k];
+  inp.addEventListener('input',()=>{P[k]=parseFloat(inp.value); out.textContent=inp.value; setChip(''); lazy();});
+  row.append(inp,out); sliders.appendChild(row); outs[k]=inp;
+});
+const chipBox=document.getElementById('presets');
+function setChip(name){ [...chipBox.children].forEach(c=>c.classList.toggle('on',c.textContent===name)); }
+Object.keys(PRESETS).forEach(name=>{
+  const b=document.createElement('button'); b.className='chip'; b.textContent=name;
+  b.onclick=()=>{ Object.assign(P,PRESETS[name]);
+    DEFS.forEach(([k])=>{outs[k].value=P[k]; outs[k].previousSibling; outs[k].parentElement.lastChild.textContent=P[k];});
+    setChip(name); rebuild(); };
+  chipBox.appendChild(b);
+});
+document.getElementById('color').oninput=e=>mat.color.set(e.target.value);
+document.getElementById('rough').oninput=e=>mat.roughness=parseFloat(e.target.value);
+document.getElementById('wire').onclick=e=>{mat.wireframe=!mat.wireframe; e.target.textContent=mat.wireframe?'实体':'线框';};
+document.getElementById('reset').onclick=()=>{camera.position.set(260,200,340); controls.target.set(0,150,0);};
+document.getElementById('rand').onclick=()=>{
+  const r=(a,b)=>(a+Math.random()*(b-a));
+  Object.assign(P,{R:r(50,120),bellyPos:r(.2,.6),neckStart:r(.5,.9),neckR:r(12,50),
+    mouthR:r(12,70),flare:r(.8,2.6),footR:r(15,40),bulge:Math.random()<.35?r(.3,1):0,
+    sectionN:r(1.6,6),ribs:Math.random()<.5?Math.round(r(4,20)):0,ribAmp:r(.05,.22),
+    twist:Math.random()<.4?r(.3,2):0,waveFreq:Math.random()<.35?r(2,9):0,waveAmp:r(.02,.12)});
+  DEFS.forEach(([k])=>{outs[k].value=P[k]; outs[k].parentElement.lastChild.textContent=(+P[k]).toFixed(2).replace(/\.?0+$/,'');});
+  setChip(''); rebuild();
+};
+const panel=document.getElementById('panel');
+// 手动收起/展开：默认展开，点标题栏按钮才收起
+document.getElementById('collapse').onclick=()=>{
+  const c=panel.classList.toggle('collapsed');
+  document.getElementById('collapse').textContent=c?'▲ 展开面板':'▼ 收起面板';
+  if(matchMedia('(max-width:760px)').matches) stage.style.height=c?'100%':'';
+  resizeStage();
+};
+
+/* ================= 5. 导出 ================= */
+function save(blob,name){ const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000); }
+document.getElementById('expStl').onclick=()=>{
+  save(new Blob([new STLExporter().parse(vase,{binary:true})],{type:'model/stl'}),'vase.stl');};
+document.getElementById('expObj').onclick=()=>{
+  save(new Blob([new OBJExporter().parse(vase)],{type:'text/plain'}),'vase.obj');};
+document.getElementById('expGlb').onclick=()=>{
+  const s=new THREE.Scene(); s.add(new THREE.Mesh(vase.geometry, mat.clone()));
+  new GLTFExporter().parse(s,b=>save(new Blob([b],{type:'model/gltf-binary'}),'vase.glb'),()=>{},{binary:true});};
+
+/* ================= 6. 启动 ================= */
+function resizeStage(){const r=stage.getBoundingClientRect();
+  renderer.setSize(r.width,r.height,false);
+  camera.aspect=r.width/r.height; camera.updateProjectionMatrix();}
+addEventListener('resize',resizeStage);
+resizeStage();
+(function loop(){requestAnimationFrame(loop); controls.update(); renderer.render(scene,camera);})();
+rebuild(); setChip('玉壶春瓶');
+setTimeout(()=>{ if(!renderer.getContext()) document.getElementById('fallback').style.display='grid'; },4000);
+</script>
+</body>
+</html>
