@@ -105,7 +105,7 @@ import { OBJExporter }     from 'three/addons/exporters/OBJExporter.js';
 /* ================= 1. 参数定义 ================= */
 const P = { // 默认值（玉壶春瓶）
   H:300, R:88, bellyPos:0.40, neckStart:0.66, neckR:30, mouthR:38,
-  flare:1.9, footR:28, bulge:0.0,
+  flare:1.9, footR:28, thick:4, bulge:0.0,
   sectionN:2, ribs:0, ribAmp:0.10, twist:0, waveFreq:0, waveAmp:0.0
 };
 const DEFS = [
@@ -113,6 +113,7 @@ const DEFS = [
   ['bellyPos','腹部位置',0.15,0.85,0.01], ['neckStart','颈部起点',0.3,0.98,0.01],
   ['neckR','颈径',5,90,1], ['mouthR','口径',5,110,1],
   ['flare','口沿外撇',0.5,3,0.01], ['footR','圈足半径',8,80,1],
+  ['thick','壁厚·打印',1,15,0.5],
   ['bulge','双腹鼓出',0,1,0.01],
   ['sectionN','截面指数 n',1,8,0.1],
   ['ribs','棱脊数',0,24,1], ['ribAmp','棱脊深度',0,0.35,0.005],
@@ -171,28 +172,39 @@ function buildGeometry(){
   const PROFILE=160, SEG=128, prof=curve.getPoints(PROFILE);
   const exp=2/P.sectionN;
   const sgn=v=>v<0?-1:1;
-  const pos=new Float32Array((PROFILE+1)*(SEG+1)*3+3); // +1 个底部中心封底顶点
+  const T=Math.max(0.8, Math.min(P.thick ?? 4, P.footR*0.5)); // 壁厚（3D打印）
+  const COLS=SEG+1, GRID=(PROFILE+1)*COLS;
+  const pos=new Float32Array(GRID*2*3);
   let i=0;
-  for(let r=0;r<=PROFILE;r++){
-    const v=r/PROFILE, R0=prof[r].x, y=prof[r].y;
-    const wave=1+P.waveAmp*Math.sin(2*Math.PI*P.waveFreq*v);
-    for(let s=0;s<=SEG;s++){
-      const th=s/SEG*2*Math.PI;
-      const rip=1+P.ribAmp*Math.cos(P.ribs*th-2*Math.PI*P.twist*v);
-      const R=R0*rip*wave;
-      pos[i++]=R*sgn(Math.cos(th))*Math.pow(Math.abs(Math.cos(th)),exp);
-      pos[i++]=y;
-      pos[i++]=R*sgn(Math.sin(th))*Math.pow(Math.abs(Math.sin(th)),exp);
+  for(let pass=0;pass<2;pass++){ // 0=外壁 1=内壁
+    for(let r=0;r<=PROFILE;r++){
+      const v=r/PROFILE;
+      const y  = pass? Math.max(prof[r].y, T) : prof[r].y;
+      const R0 = pass? Math.max(prof[r].x-T, 0.6) : prof[r].x;
+      const wave=1+P.waveAmp*Math.sin(2*Math.PI*P.waveFreq*v);
+      for(let s=0;s<=SEG;s++){
+        const th=s/SEG*2*Math.PI;
+        const rip=1+P.ribAmp*Math.cos(P.ribs*th-2*Math.PI*P.twist*v);
+        const R=R0*rip*wave;
+        pos[i++]=R*sgn(Math.cos(th))*Math.pow(Math.abs(Math.cos(th)),exp);
+        pos[i++]=y;
+        pos[i++]=R*sgn(Math.sin(th))*Math.pow(Math.abs(Math.sin(th)),exp);
+      }
     }
   }
-  // ---- 底部封底：中心点 + 三角形扇面（法线朝下，瓶底为实体）----
-  const CAP=(PROFILE+1)*(SEG+1);
-  pos[CAP*3]=0; pos[CAP*3+1]=prof[0].y; pos[CAP*3+2]=0;
-  const idx=[];
-  for(let s=0;s<SEG;s++) idx.push(CAP,s,s+1);           // 底部扇面
+  const idx=[], G=GRID;
   for(let r=0;r<PROFILE;r++) for(let s=0;s<SEG;s++){
-    const a=r*(SEG+1)+s, b=a+SEG+1;
-    idx.push(a,b,a+1, b,b+1,a+1);
+    const a=r*COLS+s, b=a+COLS;
+    idx.push(a,b,a+1, b,b+1,a+1);              // 外壁（朝外）
+    idx.push(G+a,G+a+1,G+b, G+b,G+a+1,G+b+1);  // 内壁（朝内）
+  }
+  for(let s=0;s<SEG;s++){ // 瓶底环（壁厚实体底）
+    const oA=s,oB=s+1,iA=G+s,iB=G+s+1;
+    idx.push(oA,oB,iA, oB,iB,iA);
+  }
+  for(let s=0;s<SEG;s++){ // 口沿环（封闭瓶口）
+    const oA=PROFILE*COLS+s,oB=oA+1,iA=G+PROFILE*COLS+s,iB=iA+1;
+    idx.push(oA,iA,oB, oB,iA,iB);
   }
   const g=new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos,3));
@@ -205,7 +217,7 @@ function rebuild(){
   else { vase=new THREE.Mesh(g,mat); scene.add(vase); }
   document.getElementById('stat').innerHTML =
     `顶点 ${g.attributes.position.count.toLocaleString()} · 面片 ${(g.index.count/3).toLocaleString()}<br>`+
-    `公式：母线 Catmull-Rom × 超椭圆(n=${P.sectionN}) × cos 棱脊/扭转 × sin 竖向波纹<br>底部实体封闭（扇形封底），可直接 3D 打印`; 
+    `公式：母线 Catmull-Rom × 超椭圆(n=${P.sectionN}) × cos 棱脊/扭转 × sin 竖向波纹<br>带壁厚实体（水密封闭，可直接 3D 打印）`; 
 }
 let timer=null;
 const lazy=()=>{clearTimeout(timer); timer=setTimeout(rebuild,60);};
@@ -272,7 +284,13 @@ addEventListener('resize',resizeStage);
 resizeStage();
 (function loop(){requestAnimationFrame(loop); controls.update(); renderer.render(scene,camera);})();
 rebuild(); setChip('玉壶春瓶');
-setTimeout(()=>{ if(!renderer.getContext()) document.getElementById('fallback').style.display='grid'; },4000);
+renderer.render(scene,camera); // 立即渲染首帧，不依赖动画帧
+setTimeout(()=>{ // 2.5 秒内一帧都没渲染出来 = 当前环境不支持 WebGL
+  if(renderer.info.render.frame===0){
+    const fb=document.getElementById('fallback');
+    fb.style.display='grid';
+    fb.innerHTML='检测到 3D 渲染未启动：当前预览环境（如 iOS"文件"App 预览）不支持 WebGL。<br><br>解决办法（任选其一）：<br>① 安装 Chrome App，用它打开本文件<br>② 把本文件上传到网络（GitHub Pages / Gitee Pages / 任意静态空间），用 Safari 打开链接<br>③ 发到电脑上，用 Chrome / Edge 双击打开';
+  }},2500);
 </script>
 </body>
 </html>
