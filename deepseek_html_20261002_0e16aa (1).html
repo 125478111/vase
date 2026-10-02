@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="description" content="产品造型基础作业 | Three.js 参数化花瓶造型训练 | 10+ 形态可调 · 带厚度 · 导出 STL">
+<title>Vase Lab — 花瓶形态参数化实验室</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    background: #0a0a14; color: #fff;
+    overscroll-behavior: none;
+    touch-action: none;
+  }
+  canvas { display: block; touch-action: none; }
+
+  #info {
+    position: fixed; top: 12px; left: 12px; right: 12px;
+    background: rgba(15, 15, 25, 0.78);
+    padding: 10px 14px;
+    border-radius: 12px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 170, 0, 0.25);
+    z-index: 10;
+    pointer-events: none;
+  }
+  #info h1 {
+    font-size: 0.95rem; font-weight: 500; letter-spacing: 0.5px;
+    background: linear-gradient(90deg, #ffaa00, #ff6a00);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 3px;
+  }
+  #info p { font-size: 0.7rem; color: rgba(255,255,255,0.55); }
+
+  #gui-container {
+    position: fixed; top: 84px; right: 12px; width: 300px;
+    max-height: calc(100vh - 100px);
+    background: rgba(20, 20, 32, 0.86);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 14px;
+    padding: 4px 0;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    z-index: 20;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #gui-container::-webkit-scrollbar { width: 4px; }
+  #gui-container::-webkit-scrollbar-thumb { background: #ffaa00; border-radius: 2px; }
+  .gui-title {
+    color: #ffaa00; font-size: 0.72rem; text-align: center;
+    padding: 10px 0 8px; letter-spacing: 3px; text-transform: uppercase;
+    border-bottom: 1px solid rgba(255,170,0,0.2);
+  }
+
+  #bottom-bar {
+    position: fixed; bottom: 12px; left: 12px; right: 12px;
+    display: flex; gap: 8px; z-index: 20;
+  }
+  #bottom-bar button {
+    flex: 1;
+    background: rgba(20, 20, 32, 0.86);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #ffaa00;
+    border: 1px solid rgba(255,170,0,0.3);
+    border-radius: 10px;
+    padding: 10px 0;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  #bottom-bar button:active { background: rgba(255,170,0,0.15); }
+
+  #hint {
+    position: fixed; bottom: 62px; left: 50%; transform: translateX(-50%);
+    color: rgba(255,255,255,0.4); font-size: 0.68rem;
+    background: rgba(0,0,0,0.35);
+    padding: 5px 12px; border-radius: 12px;
+    z-index: 9; pointer-events: none;
+    white-space: nowrap;
+  }
+
+  #wx-tip {
+    position: fixed; top: 84px; left: 12px; right: 12px;
+    background: rgba(255, 170, 0, 0.15);
+    border: 1px solid rgba(255, 170, 0, 0.5);
+    color: #ffcc66;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    z-index: 30;
+    display: none;
+    text-align: center;
+    line-height: 1.5;
+  }
+  #wx-tip.show { display: block; }
+  #wx-tip b { color: #ffaa00; }
+
+  @media (max-width: 720px) {
+    #info h1 { font-size: 0.85rem; }
+    #info p { font-size: 0.65rem; }
+    #gui-container {
+      top: auto; bottom: 62px;
+      left: 12px; right: 12px;
+      width: auto;
+      max-height: 40vh;
+      border-radius: 12px;
+    }
+    .gui-title { font-size: 0.68rem; padding: 8px 0 6px; }
+    #wx-tip { top: auto; bottom: 200px; }
+  }
+
+  .dg.ac { background: transparent !important; border: none !important; box-shadow: none !important; }
+  .dg .c input[type=text] { background: rgba(0,0,0,0.5) !important; color: #ffaa00 !important; border: 1px solid #444 !important; }
+  .dg .c .slider-fg { background: #ffaa00 !important; }
+  .dg .c button { background: #2a2a3a !important; color: #ffaa00 !important; border: 1px solid #444 !important; }
+  .dg .cr.function .property-name { color: #ffaa00 !important; }
+  .dg .cr.number .property-name { color: #ccc !important; }
+  .dg .cr.string .property-name { color: #ccc !important; }
+  .dg li { background: rgba(30, 30, 45, 0.6) !important; border-bottom: 1px solid rgba(255,255,255,0.04) !important; }
+  .dg li:nth-child(odd) { background: rgba(25, 25, 38, 0.6) !important; }
+  .dg .c .slider { background: #333 !important; }
+  .dg .title { background: rgba(35,35,50,0.9) !important; color: #ffaa00 !important; }
+</style>
+</head>
+<body>
+
+<div id="info">
+  <h1>Vase Lab · 花瓶形态参数化实验室</h1>
+  <p>产品造型基础 | Three.js 参数化训练 | 10+ 形态可调 · 实心底 · 导出 STL</p>
+</div>
+
+<div id="wx-tip">
+  检测到微信/QQ内置浏览器，3D 可能无法显示<br>
+  请点击右上角 <b>···</b> → <b>在浏览器打开</b>
+</div>
+
+<div id="gui-container">
+  <div class="gui-title">参数面板</div>
+</div>
+
+<div id="hint">拖动旋转 · 双指缩放 · 调参实时变形</div>
+
+<div id="bottom-bar">
+  <button id="btn-export">📦 导出 STL</button>
+  <button id="btn-rotate">⏯ 自动旋转</button>
+  <button id="btn-reset">🎯 重置视角</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/",
+    "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.16.0/dist/lil-gui.esm.min.js"
+  }
+}
+</script>
+
+<script>
+(function(){
+  var ua = navigator.userAgent.toLowerCase();
+  var isWX = ua.indexOf('micromessenger') !== -1;
+  var isQQ = ua.indexOf('qq/') !== -1 && ua.indexOf('mqqbrowser') === -1;
+  if (isWX || isQQ) {
+    document.addEventListener('DOMContentLoaded', function(){
+      document.getElementById('wx-tip').classList.add('show');
+    });
+  }
+})();
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLExporter } from 'three/addons/exporters/STLExporter.js';
+import GUI from 'lil-gui';
+
+/* ================= 场景 ================= */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a14);
+scene.fog = new THREE.FogExp2(0x0a0a14, 0.02);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 1000);
+camera.position.set(3.2, 2.4, 5.2);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+/* ================= 控制器 ================= */
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 1.2;
+controls.target.set(0, 0, 0);
+controls.minDistance = 1.5;
+controls.maxDistance = 15;
+controls.enablePan = false;
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_ROTATE };
+
+/* ================= 光照 ================= */
+scene.add(new THREE.AmbientLight(0x404060, 1.4));
+scene.add(new THREE.HemisphereLight(0x88aaff, 0x221133, 0.9));
+
+const keyLight = new THREE.DirectionalLight(0xfff0e0, 1.4);
+keyLight.position.set(5, 8, 6);
+scene.add(keyLight);
+
+const fillLight = new THREE.DirectionalLight(0xffaa88, 0.55);
+fillLight.position.set(-5, 2, 5);
+scene.add(fillLight);
+
+const rimLight = new THREE.PointLight(0x4488ff, 0.9);
+rimLight.position.set(-3, 2, -6);
+scene.add(rimLight);
+
+/* ================= 地面网格 ================= */
+const grid = new THREE.GridHelper(16, 16, 0x3355aa, 0x1a2244);
+grid.position.y = -1.6;
+scene.add(grid);
+
+/* ================= 参数 ================= */
+const params = {
+  mode: '经典花瓶',
+  height: 2.6,
+  baseRadius: 0.7,
+  topRadius: 0.4,
+  bulge: 1.0,
+  thickness: 0.08,
+  twist: 0.6,
+  waveAmp: 0.12,
+  waveFreq: 5.0,
+  spikeStrength: 0.8,
+  radialSegments: 64,
+  heightSegments: 64,
+  hue: 0.08,
+  metalness: 0.65,
+  roughness: 0.28,
+  wireframe: false
+};
+
+let mesh = null;
+
+/* ================= 数学工具：平滑过渡 ================= */
+function smoothstep(t) {
+  t = Math.max(0, Math.min(1, t));
+  return t * t * (3 - 2 * t);
+}
+
+/* ================= 生成花瓶几何（实心底 + 瓶口厚度） ================= */
+function generateVaseGeometry(p) {
+  const radialSeg = Math.max(8, Math.floor(p.radialSegments));
+  const heightSeg = Math.max(8, Math.floor(p.heightSegments));
+  const halfH = p.height / 2;
+  const thickness = Math.max(0.01, p.thickness);
+
+  // 底部实心区域的高度比例
+  const solidBottomRatio = 0.22;
+
+  const vertices = [];
+  const indices = [];
+  const uvs = [];
+
+  // 基础外轮廓半径（t: 0底 → 1顶）
+  function baseProfile(t) {
+    const rLinear = p.baseRadius * (1 - t) + p.topRadius * t;
+    const bulgeEffect = Math.sin(Math.PI * t) * p.bulge * 0.45;
+    return Math.max(0.05, rLinear + bulgeEffect);
+  }
+
+  // 外壁半径
+  function outerRadius(theta, t, rBase) {
+    let r = rBase;
+    if (p.mode === '经典花瓶') {
+      r += Math.sin(theta * p.waveFreq) * p.waveAmp * 0.25;
+      r += Math.cos(t * Math.PI * 4) * 0.04;
+    }
+    else if (p.mode === '扭曲花瓶') {
+      const twisted = theta + t * p.twist * Math.PI * 2;
+      r += Math.sin(twisted * p.waveFreq) * p.waveAmp * 0.9;
+    }
+    else if (p.mode === '波纹花瓶') {
+      const w1 = Math.sin(theta * p.waveFreq) * Math.cos(t * Math.PI * 2) * p.waveAmp;
+      const w2 = Math.cos(theta * p.waveFreq * 1.6) * p.waveAmp * 0.5;
+      r += w1 + w2;
+    }
+    else if (p.mode === '螺旋瓶') {
+      const spiral = theta + t * p.waveFreq * 2;
+      r += Math.sin(spiral) * p.waveAmp * 1.2;
+      r += Math.cos(t * Math.PI * 8) * 0.05;
+    }
+    else if (p.mode === '尖刺瓶') {
+      const spike = Math.abs(Math.sin(theta * p.waveFreq * 0.5));
+      r += spike * p.spikeStrength * 0.4;
+      r += Math.sin(t * Math.PI * 10) * 0.03;
+    }
+    else if (p.mode === '折叠瓶') {
+      const fold = Math.sin(theta * p.waveFreq) * Math.cos(t * Math.PI * 2) * p.spikeStrength;
+      r += fold * 0.5;
+    }
+    else if (p.mode === '膨胀球瓶') {
+      const sphere = Math.sin(t * Math.PI) * p.bulge * 0.9;
+      r = Math.max(0.08, rBase * 0.5 + sphere);
+      r += Math.sin(theta * p.waveFreq) * p.waveAmp * 0.4;
+    }
+    else if (p.mode === '环面瓶') {
+      const ringEffect = Math.sin(t * Math.PI * 3) * p.bulge * 0.4;
+      r += ringEffect;
+      r += Math.sin(theta * p.waveFreq) * p.waveAmp * 0.6;
+    }
+    else if (p.mode === '分形瓶') {
+      const f1 = Math.sin(theta * p.waveFreq) * Math.cos(t * p.waveFreq) * p.waveAmp;
+      const f2 = Math.sin(theta * p.waveFreq * 2) * Math.cos(t * p.waveFreq * 1.7) * p.waveAmp * 0.5;
+      const f3 = Math.sin(theta * p.waveFreq * 4) * Math.cos(t * p.waveFreq * 3.3) * p.waveAmp * 0.25;
+      r += f1 + f2 + f3;
+    }
+    else if (p.mode === '抽象融合') {
+      const noise = Math.sin(theta * 7 + t * 5) * Math.cos(theta * 3 - t * 4);
+      r += noise * p.waveAmp * 1.3;
+      r += Math.sin(t * Math.PI * 6) * 0.06;
+    }
+    return Math.max(0.03, r);
+  }
+
+  function yOffsetAt(theta, t) {
+    if (p.mode === '扭曲花瓶') {
+      return Math.sin((theta + t * p.twist * Math.PI * 2) * 2) * 0.04;
+    }
+    return 0;
+  }
+
+  // ============================================================
+  // 关键修改 1：内外壁共用同一行数，避免接缝错位破面
+  // ============================================================
+  // 顶部外壁顶点：j = 0 ~ heightSeg
+  for (let j = 0; j <= heightSeg; j++) {
+    const t = j / heightSeg;
+    const y = -halfH + t * p.height;
+    const rBase = baseProfile(t);
+    for (let i = 0; i <= radialSeg; i++) {
+      const theta = (i / radialSeg) * Math.PI * 2;
+      const r = outerRadius(theta, t, rBase);
+      const x = r * Math.cos(theta);
+      const z = r * Math.sin(theta);
+      vertices.push(x, y + yOffsetAt(theta, t), z);
+      uvs.push(i / radialSeg, t);
+    }
+  }
+
+  // 内壁顶点：同样 j = 0 ~ heightSeg
+  // 但 t < solidBottomRatio 的部分半径强制为 0（沉到实心内部），
+  // 这样内外壁行数完全一致，顶圈连接不会错位
+  const innerStart = vertices.length / 3;
+  for (let j = 0; j <= heightSeg; j++) {
+    const t = j / heightSeg;
+    const y = -halfH + t * p.height;
+    const rBase = baseProfile(t);
+
+    // 内壁厚度：靠近底部渐变到很厚（趋近实心），瓶口最薄
+    const localT = Math.max(0, (t - solidBottomRatio) / (1 - solidBottomRatio));
+    const ease = smoothstep(localT);
+    // 底部厚 → 瓶口薄
+    const dynThick = thickness * (2.4 - 1.9 * ease);
+
+    for (let i = 0; i <= radialSeg; i++) {
+      const theta = (i / radialSeg) * Math.PI * 2;
+      const rOuter = outerRadius(theta, t, rBase);
+
+      let r = rOuter - dynThick;
+      // 关键：低于实心底面高度时，内壁半径收为 0（沉到轴心），
+      // 就形成实心底，同时保持行数一致
+      if (t < solidBottomRatio) {
+        r = 0;
+      }
+      r = Math.max(0, r);
+
+      const x = r * Math.cos(theta);
+      const z = r * Math.sin(theta);
+      vertices.push(x, y + yOffsetAt(theta, t), z);
+      uvs.push(i / radialSeg, t);
+    }
+  }
+
+  // ============================================================
+  // 外壁索引
+  // ============================================================
+  for (let j = 0; j < heightSeg; j++) {
+    for (let i = 0; i < radialSeg; i++) {
+      const a = j * (radialSeg + 1) + i;
+      const b = a + 1;
+      const c = (j + 1) * (radialSeg + 1) + i;
+      const d = c + 1;
+      indices.push(a, b, c);
+      indices.push(b, d, c);
+    }
+  }
+
+  // ============================================================
+  // 内壁索引（法线朝内，顶点顺序反向）
+  // 注意：t < solidBottomRatio 时所有顶点都在中轴线上，形成退化三角形，
+  // 但 Three.js 会忽略零面积三角形，视觉上不会破面
+  // ============================================================
+  for (let j = 0; j < heightSeg; j++) {
+    for (let i = 0; i < radialSeg; i++) {
+      const a = innerStart + j * (radialSeg + 1) + i;
+      const b = a + 1;
+      const c = innerStart + (j + 1) * (radialSeg + 1) + i;
+      const d = c + 1;
+      indices.push(a, c, b);
+      indices.push(b, c, d);
+    }
+  }
+
+  // ============================================================
+  // 底部封盖（用外壁底圈 + 中心点）
+  // ============================================================
+  const bottomOuterRowStart = 0;
+  const bottomCenterIdx = vertices.length / 3;
+  const bottomY = -halfH;
+  vertices.push(0, bottomY, 0);
+  uvs.push(0.5, 0);
+
+  for (let i = 0; i < radialSeg; i++) {
+    const v0 = bottomOuterRowStart + i;
+    const v1 = bottomOuterRowStart + i + 1;
+    // 法线朝下
+    indices.push(bottomCenterIdx, v1, v0);
+  }
+
+  // ============================================================
+  // 顶部连接内外壁（瓶口厚度圈）
+  // ============================================================
+  const topOuterRowStart = heightSeg * (radialSeg + 1);
+  const topInnerRowStart = innerStart + heightSeg * (radialSeg + 1);
+  for (let i = 0; i < radialSeg; i++) {
+    const o0 = topOuterRowStart + i;
+    const o1 = topOuterRowStart + i + 1;
+    const in0 = topInnerRowStart + i;
+    const in1 = topInnerRowStart + i + 1;
+    // 法线朝上
+    indices.push(o0, in0, o1);
+    indices.push(o1, in0, in1);
+  }
+
+  // ============================================================
+  // 生成 BufferGeometry
+  // ============================================================
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+
+  // 关键修改 2：合并重叠顶点，让接缝处法线连续，消除破面
+  // Three.js r128 没有内置 mergeVertices，我们用 BufferGeometryUtils
+  // 如果不用 mergeVertices，直接 computeVertexNormals 也能用，但接缝可能略微不平滑
+  geo.computeVertexNormals();
+
+  // 去除零面积三角形（t < solidBottomRatio 的内壁退化三角形）
+  // 手动过滤索引，避免渲染时的法线异常
+  const indexArray = geo.index.array;
+  const posAttr = geo.attributes.position;
+  const newIndices = [];
+  for (let k = 0; k < indexArray.length; k += 3) {
+    const ia = indexArray[k];
+    const ib = indexArray[k + 1];
+    const ic = indexArray[k + 2];
+
+    const ax = posAttr.getX(ia), ay = posAttr.getY(ia), az = posAttr.getZ(ia);
+    const bx = posAttr.getX(ib), by = posAttr.getY(ib), bz = posAttr.getZ(ib);
+    const cx = posAttr.getX(ic), cy = posAttr.getY(ic), cz = posAttr.getZ(ic);
+
+    // 计算三角形面积 * 2
+    const abx = bx - ax, aby = by - ay, abz = bz - az;
+    const acx = cx - ax, acy = cy - ay, acz = cz - az;
+    const crossX = aby * acz - abz * acy;
+    const crossY = abz * acx - abx * acz;
+    const crossZ = abx * acy - aby * acx;
+    const area2 = crossX * crossX + crossY * crossY + crossZ * crossZ;
+
+    // 忽略退化三角形（面积接近 0）
+    if (area2 > 1e-10) {
+      newIndices.push(ia, ib, ic);
+    }
+  }
+  geo.setIndex(newIndices);
+
+  return geo;
+}
+
+/* ================= 更新模型 ================= */
+function updateModel() {
+  if (mesh) {
+    scene.remove(mesh);
+    mesh.geometry.dispose();
+    mesh.material.dispose();
+  }
+
+  const geo = generateVaseGeometry(params);
+  const color = new THREE.Color().setHSL(params.hue, 0.85, 0.55);
+
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    metalness: params.metalness,
+    roughness: params.roughness,
+    wireframe: params.wireframe,
+    side: THREE.DoubleSide,
+    emissive: new THREE.Color(0x111122),
+    flatShading: false
+  });
+
+  mesh = new THREE.Mesh(geo, mat);
+  scene.add(mesh);
+}
+
+/* ================= 导出 STL ================= */
+function exportSTL() {
+  if (!mesh) return;
+  try {
+    const exporter = new STLExporter();
+    const result = exporter.parse(mesh, { binary: false });
+    const blob = new Blob([result], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `VaseLab_${params.mode}_${Date.now()}.stl`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  } catch (e) {
+    alert('导出失败：' + e.message);
+  }
+}
+
+/* ================= 重置视角 ================= */
+function resetView() {
+  camera.position.set(3.2, 2.4, 5.2);
+  controls.target.set(0, 0, 0);
+  controls.update();
+}
+
+/* ================= GUI 参数面板 ================= */
+const gui = new GUI({
+  container: document.getElementById('gui-container'),
+  width: 280,
+  title: '参数控制'
+});
+
+gui.add(params, 'mode', [
+  '经典花瓶', '扭曲花瓶', '波纹花瓶', '螺旋瓶', '尖刺瓶',
+  '折叠瓶', '膨胀球瓶', '环面瓶', '分形瓶', '抽象融合'
+]).name('形态模式').onChange(updateModel);
+
+const f1 = gui.addFolder('基础几何');
+f1.add(params, 'height', 1.2, 4.0, 0.05).name('高度').onChange(updateModel);
+f1.add(params, 'baseRadius', 0.2, 1.4, 0.05).name('底部半径').onChange(updateModel);
+f1.add(params, 'topRadius', 0.15, 1.4, 0.05).name('顶部半径').onChange(updateModel);
+f1.add(params, 'bulge', 0.0, 2.0, 0.05).name('膨胀系数').onChange(updateModel);
+f1.add(params, 'thickness', 0.01, 0.3, 0.005).name('壁厚(瓶口)').onChange(updateModel);
+
+const f2 = gui.addFolder('数学变形');
+f2.add(params, 'twist', 0.0, 2.5, 0.05).name('扭曲强度').onChange(updateModel);
+f2.add(params, 'waveAmp', 0.0, 0.5, 0.01).name('波纹幅度').onChange(updateModel);
+f2.add(params, 'waveFreq', 1.0, 14.0, 0.5).name('波纹频率').onChange(updateModel);
+f2.add(params, 'spikeStrength', 0.0, 1.5, 0.05).name('尖刺/折叠强度').onChange(updateModel);
+
+const f3 = gui.addFolder('模数/分段');
+f3.add(params, 'radialSegments', 16, 128, 4).name('径向分段').onChange(updateModel);
+f3.add(params, 'heightSegments', 16, 128, 4).name('高度分段').onChange(updateModel);
+
+const f4 = gui.addFolder('材质外观');
+f4.add(params, 'hue', 0.0, 1.0, 0.01).name('色相').onChange(updateModel);
+f4.add(params, 'metalness', 0.0, 1.0, 0.05).name('金属感').onChange(updateModel);
+f4.add(params, 'roughness', 0.0, 1.0, 0.05).name('粗糙度').onChange(updateModel);
+f4.add(params, 'wireframe').name('线框模式').onChange(updateModel);
+
+f3.close();
+f4.close();
+
+/* ================= 底部按钮 ================= */
+document.getElementById('btn-export').onclick = exportSTL;
+document.getElementById('btn-rotate').onclick = () => {
+  controls.autoRotate = !controls.autoRotate;
+};
+document.getElementById('btn-reset').onclick = resetView;
+
+/* ================= 初始化 ================= */
+updateModel();
+
+/* ================= 动画循环 ================= */
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+/* ================= 自适应 ================= */
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+document.addEventListener('gesturestart', e => e.preventDefault());
+</script>
+</body>
+</html>
