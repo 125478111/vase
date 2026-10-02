@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Vase Lab · 参数化花瓶造型实验室</title>
+<style>
+  :root{ --bg:#0b1020; --panel:#141a2e; --line:#2a3350; --txt:#e8ecf5; --sub:#8b96b0; --acc:#ff8c42; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;}
+  #stage{position:fixed;top:0;left:0;right:0;height:100%;}
+  canvas{display:block;}
+  #head{position:fixed;top:0;left:0;right:0;padding:12px 16px;pointer-events:none;z-index:5;
+    background:linear-gradient(#000c,transparent);}
+  #head h1{margin:0;font-size:17px;color:var(--acc);letter-spacing:1px;}
+  #head p{margin:3px 0 0;font-size:11px;color:var(--sub);}
+  #panel{position:fixed;z-index:10;top:0;right:0;bottom:0;width:318px;background:var(--panel);
+    border-left:1px solid var(--line);display:flex;flex-direction:column;transition:transform .25s;}
+  #panel.hiddenM{transform:translateX(100%);}
+  #phead{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 8px;
+    border-bottom:1px solid var(--line);}
+  #phead b{color:var(--acc);font-size:14px;}
+  #collapseBtn{border:1px solid var(--line);background:#1c2438;color:var(--txt);border-radius:8px;
+    padding:5px 12px;font-size:12px;}
+  #scroll{overflow-y:auto;flex:1;padding:8px 12px;-webkit-overflow-scrolling:touch;}
+  details{margin:6px 0;border:1px solid var(--line);border-radius:10px;background:#171f35;}
+  summary{cursor:pointer;padding:8px 10px;font-size:12px;color:var(--acc);font-weight:600;letter-spacing:1px;list-style:none;}
+  summary::before{content:'▸ ';}
+  details[open] summary::before{content:'▾ ';}
+  .row{display:grid;grid-template-columns:78px 1fr 56px;align-items:center;gap:6px;margin:6px 8px;}
+  .row label{font-size:11px;color:var(--sub);white-space:nowrap;}
+  input[type=range]{width:100%;height:22px;margin:0;accent-color:var(--acc);}
+  input[type=number]{width:56px;background:#0f1526;border:1px solid var(--line);color:var(--txt);
+    border-radius:6px;padding:3px 4px;font-size:11px;text-align:right;}
+  select{width:calc(100% - 16px);margin:4px 8px;background:#0f1526;color:var(--txt);
+    border:1px solid var(--line);border-radius:8px;padding:7px;font-size:13px;}
+  .chk{display:flex;align-items:center;gap:8px;margin:8px;font-size:12px;color:var(--sub);}
+  .bar{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line);flex-wrap:wrap;}
+  .btn{flex:1;min-width:86px;border:none;border-radius:10px;padding:10px 6px;font-size:12px;
+    cursor:pointer;font-weight:600;}
+  .btn.acc{background:var(--acc);color:#1a0e04;}
+  .btn.ghost{background:#1c2438;color:var(--txt);border:1px solid var(--line);}
+  #stat{font-size:10px;color:var(--sub);padding:6px 12px;border-top:1px solid var(--line);line-height:1.6;}
+  #panelToggle{position:fixed;z-index:20;right:12px;top:64px;border:1px solid var(--line);
+    background:var(--panel);color:var(--acc);border-radius:999px;padding:8px 14px;font-size:13px;display:none;}
+  @media(max-width:760px){
+    #panel{width:100%;top:auto;left:0;right:0;bottom:0;max-height:56vh;border-left:none;
+      border-radius:16px 16px 0 0;border-top:1px solid var(--line);}
+    #panel.hiddenM{transform:translateY(105%);}
+    #panelToggle{display:block;}
+    #stage{bottom:0;}
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage"></div>
+<div id="head">
+  <h1>Vase Lab · 参数化花瓶造型实验室</h1>
+  <p>10 形态模式 × 数学函数驱动 · 实心导出 · 单指旋转 / 双指缩放</p>
+</div>
+<button id="panelToggle">⚙ 参数</button>
+<div id="panel">
+  <div id="phead"><b>参数面板</b><button id="collapseBtn">收起 ▾</button></div>
+  <div id="scroll">
+    <details open><summary>参数控制</summary>
+      <select id="modeSel"></select>
+      <div id="modeDesc" style="font-size:11px;color:var(--sub);margin:2px 10px 6px;"></div>
+    </details>
+    <details open><summary>基础几何</summary><div id="gGeo"></div></details>
+    <details open><summary>数学变形</summary><div id="gMath"></div></details>
+    <details><summary>模数 / 分段</summary><div id="gSeg"></div></details>
+    <details open><summary>材质外观</summary><div id="gMat"></div>
+      <label class="chk"><input type="checkbox" id="wire"> 线框模式</label>
+      <label class="chk"><input type="checkbox" id="solid" checked> 实心导出（含壁厚·可打印）</label>
+    </details>
+  </div>
+  <div class="bar">
+    <button class="btn acc" id="expStl">导出 STL</button>
+    <button class="btn acc" id="expGlb">导出 GLB</button>
+  </div>
+  <div class="bar">
+    <button class="btn ghost" id="rotBtn">自动旋转：开</button>
+    <button class="btn ghost" id="resetBtn">重置视角</button>
+    <button class="btn ghost" id="randBtn">随机灵感</button>
+  </div>
+  <div id="stat"></div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { STLExporter } from 'three/addons/exporters/STLExporter.js';
+
+/* ===== 10 形态模式（每组 = 一套数学函数 + 默认参数）===== */
+const MODES = {
+  '经典花瓶':  {desc:'多项式母线的标准器型', H:3.8, rb:.60, rt:.42, swell:1.55, thick:.10, twist:0,   waveAmp:0,   waveFreq:4, spike:0,   radial:96, heightSeg:64, hue:.08, metal:.65, rough:.28},
+  '旋涡瓶':    {desc:'高膨胀缓旋的奶油螺旋', H:3.6, rb:.58, rt:.22, swell:2.10, thick:.09, twist:1.3, waveAmp:0, waveFreq:4, spike:0, radial:96, heightSeg:64, hue:.55, metal:.6,  rough:.3},
+  '波纹花瓶':  {desc:'正弦波纹沿高度传播', H:3.6, rb:.58, rt:.46, swell:1.30, thick:.10, twist:0,   waveAmp:.14, waveFreq:5, spike:0,   radial:96, heightSeg:64, hue:.35, metal:.55, rough:.32},
+  '层叠瓶':    {desc:'|sin|^p 幂次棱盘堆叠', H:2.2, rb:.68, rt:.42, swell:1.05, thick:.09, twist:0, waveAmp:.14,   waveFreq:4, spike:.55, radial:96, heightSeg:64, hue:.75, metal:.7,  rough:.25},
+  '尖刺瓶':    {desc:'|sin|ⁿ 径向尖刺（抽象工业）', H:3.4, rb:.66, rt:.50, swell:1.15, thick:.11, twist:.3,  waveAmp:0,   waveFreq:4, spike:.85, radial:96, heightSeg:64, hue:.02, metal:.75, rough:.22},
+  '折叠瓶':    {desc:'超椭圆截面 + 锯齿轮廓折纸感', H:3.6, rb:.60, rt:.44, swell:1.30, thick:.10, twist:.4,  waveAmp:0,   waveFreq:4, spike:.60, radial:96, heightSeg:64, hue:.6,  metal:.5,  rough:.35},
+  '膨胀球瓶':  {desc:'高次正弦鼓胀的球状轮廓', H:3.2, rb:.52, rt:.52, swell:2.30, thick:.11, twist:0,   waveAmp:0,   waveFreq:4, spike:0,   radial:96, heightSeg:64, hue:.12, metal:.55, rough:.3},
+  '双锥瓶':    {desc:'双锥对顶轮廓（陀螺/沙漏）', H:2.6, rb:.75, rt:.50, swell:1.40, thick:.09, twist:.4,  waveAmp:.06, waveFreq:6, spike:0,   radial:96, heightSeg:64, hue:.8,  metal:.65, rough:.28},
+  '分形瓶':    {desc:'多倍频正弦叠加的递归纹理', H:3.8, rb:.60, rt:.44, swell:1.35, thick:.10, twist:.5,  waveAmp:.10, waveFreq:3, spike:.3,  radial:96, heightSeg:64, hue:.45, metal:.6,  rough:.3},
+  '抽象融合':  {desc:'扭曲+波纹+扰动随机融合', H:3.8, rb:.62, rt:.40, swell:1.40, thick:.10, twist:.9,  waveAmp:.10, waveFreq:4, spike:.4,  radial:96, heightSeg:64, hue:.9,  metal:.68, rough:.26},
+};
+let P = {...MODES['经典花瓶'], mode:'经典花瓶', solid:true};
+
+/* ===== 场景 ===== */
+const stage=document.getElementById('stage');
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+stage.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0b1020);
+const camera=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,.01,200);
+camera.position.set(4.2,3.4,5.2);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true; controls.target.set(0,1.9,0);
+scene.add(new THREE.HemisphereLight(0xffffff,0x334,1.0));
+const d1=new THREE.DirectionalLight(0xffffff,1.8); d1.position.set(4,8,5); scene.add(d1);
+const d2=new THREE.DirectionalLight(0x88aaff,.6); d2.position.set(-5,3,-4); scene.add(d2);
+const grid=new THREE.GridHelper(12,24,0x2a3350,0x18203a); scene.add(grid);
+
+const mat=new THREE.MeshStandardMaterial({color:0xff8c42,roughness:.28,metalness:.65,side:THREE.DoubleSide});
+let mesh=null;
+
+/* ===== 造型数学核心 =====
+   半径函数 r(v,θ)：基础母线 × 膨胀 × 各模式函数变形
+   实心导出：外壁 + 内壁(内缩壁厚) + 平底 + 瓶口环（水密） */
+const sgn=v=>v<0?-1:1;
+function surf(v,th,inner){
+  const t=P; let a=th, r, y;
+  if(t.mode==='环面瓶'){
+    const Rm=Math.max(.3,t.rb)+.30, ph=2*Math.PI*v;
+    let tube=Math.max(.06,.42*t.rt)*(.6+.4*t.swell)*(1+t.waveAmp*Math.sin(t.waveFreq*ph));
+    a+=t.twist*2*Math.PI*v;
+    if(inner) tube=Math.max(.02, tube-t.thick);
+    r=Rm+tube*Math.cos(ph); y=1.7+tube*Math.sin(ph);
+  }else{
+    r=t.rb+(t.rt-t.rb)*v;
+    r*=1+(t.swell-1)*Math.pow(Math.sin(Math.PI*v),1.5);
+    y=v*t.H;
+    switch(t.mode){
+      case '扭曲花瓶': a+=t.twist*2*Math.PI*v; break;
+      case '波纹花瓶': r*=1+t.waveAmp*Math.sin(t.waveFreq*2*Math.PI*v); break;
+      case '层叠瓶':   r*=1+t.waveAmp*1.6*Math.pow(Math.abs(Math.sin(t.waveFreq*Math.PI*v)),0.55); break;
+      case '双锥瓶': { a+=t.twist*2*Math.PI*v;
+        const tent=1-Math.abs(2*v-1);
+        const peak=Math.max(t.rb,t.rt)*t.swell*1.15;
+        r=t.rb+(peak-t.rb)*Math.pow(tent,0.8);
+        if(v>0.5) r=r*(1-(v-0.5)*2)+t.rt*((v-0.5)*2);
+        r*=1+t.waveAmp*Math.sin(t.waveFreq*2*Math.PI*v); break; }
+      case '螺旋瓶':   a+=t.twist*2*Math.PI*v; r*=1+.09*t.spike*Math.cos(14*a-6*Math.PI*v*t.twist); break;
+      case '尖刺瓶':   a+=t.twist*2*Math.PI*v; r*=1+.38*t.spike*Math.pow(Math.abs(Math.sin(9*a)),4); break;
+      case '折叠瓶':   r*=1+.12*t.spike*(Math.abs(((8*v)%1)-.5)*2-.5)*2; break;
+      case '膨胀球瓶': r*=1+.9*(t.swell-1)*Math.pow(Math.sin(Math.PI*v),2); break;
+      case '分形瓶':   a+=t.twist*2*Math.PI*v;
+        r*=1+.05*Math.sin(t.waveFreq*2*Math.PI*v)+.028*Math.sin(t.waveFreq*4.7*2*Math.PI*v+1.3)+.015*Math.sin(t.waveFreq*9.1*2*Math.PI*v+2.1); break;
+      case '抽象融合': a+=t.twist*2.4*Math.PI*v;
+        r*=1+t.waveAmp*Math.sin(t.waveFreq*2*Math.PI*v)+.14*t.spike*Math.sin(5*a+3*v); break;
+    }
+    if(inner){ r=Math.max(r-t.thick,.02); y=Math.max(y,t.thick); }
+  }
+  const n=(t.mode==='折叠瓶')?(1.2+5*t.spike):2, e=2/n;
+  return [r*sgn(Math.cos(a))*Math.pow(Math.abs(Math.cos(a)),e), y, r*sgn(Math.sin(a))*Math.pow(Math.abs(Math.sin(a)),e)];
+}
+function buildGeometry(){
+  const RS=Math.round(P.radial), HS=Math.round(P.heightSeg);
+  const COLS=RS+1, GRID=(HS+1)*COLS, torus=(P.mode==='环面瓶'), solid=P.solid;
+  const NV=GRID*(solid?2:1)+(solid&&!torus?2:0);
+  const pos=new Float32Array(NV*3);
+  let i=0;
+  for(let pass=0;pass<(solid?2:1);pass++)
+    for(let r=0;r<=HS;r++)for(let s=0;s<=RS;s++){
+      const p=surf(r/HS, s/RS*2*Math.PI, pass===1);
+      pos[i++]=p[0]; pos[i++]=p[1]; pos[i++]=p[2];
+    }
+  const idx=[], G=GRID;
+  for(let r=0;r<HS;r++)for(let s=0;s<RS;s++){
+    const a=r*COLS+s, b=a+COLS;
+    idx.push(a,b,a+1, b,b+1,a+1);
+    if(solid) idx.push(G+a,G+a+1,G+b, G+b,G+a+1,G+b+1);
+  }
+  if(solid&&!torus){
+    const C0=GRID*2, CI=GRID*2+1;
+    pos[C0*3]=0; pos[C0*3+1]=0; pos[C0*3+2]=0;
+    pos[CI*3]=0; pos[CI*3+1]=P.thick; pos[CI*3+2]=0;
+    for(let s=0;s<RS;s++){ idx.push(C0,s,s+1); idx.push(CI,G+s+1,G+s); }
+    for(let s=0;s<RS;s++){ const oA=HS*COLS+s,oB=oA+1,iA=G+HS*COLS+s,iB=iA+1; idx.push(oA,iA,oB,oB,iA,iB); }
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+let timer=null;
+const lazy=()=>{clearTimeout(timer);timer=setTimeout(rebuild,80);};
+function rebuild(){
+  mat.color.setHSL(P.hue,.62,.55); mat.metalness=P.metal; mat.roughness=P.rough; // 颜色/材质实时生效
+  const g=buildGeometry();
+  if(mesh){mesh.geometry.dispose();mesh.geometry=g;} else {mesh=new THREE.Mesh(g,mat);scene.add(mesh);}
+  const tris=g.index.count/3;
+  document.getElementById('stat').innerHTML=
+    `顶点 ${g.attributes.position.count.toLocaleString()} · 面片 ${tris.toLocaleString()} · 导出时×80=毫米<br>`+
+    `${P.solid?'实心水密（含壁厚，可 3D 打印）':'空心单壳（仅预览）'} · 模式：${P.mode}`;
+}
+
+/* ===== UI 生成 ===== */
+const rows={};
+function makeRow(container,key,label,min,max,step){
+  const d=document.createElement('div'); d.className='row';
+  d.innerHTML=`<label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}"><input type="number" min="${min}" max="${max}" step="${step}">`;
+  const r=d.querySelector('input[type=range]'), n=d.querySelector('input[type=number]');
+  r.value=P[key]; n.value=P[key];
+  r.oninput=()=>{P[key]=parseFloat(r.value);n.value=r.value;lazy();};
+  n.oninput=()=>{P[key]=parseFloat(n.value);r.value=n.value;lazy();};
+  container.appendChild(d); rows[key]={r,n};
+}
+makeRow(document.getElementById('gGeo'),'H','高度',1,6,.05);
+makeRow(document.getElementById('gGeo'),'rb','底部半径',.1,1.2,.01);
+makeRow(document.getElementById('gGeo'),'rt','顶部半径',.05,1.2,.01);
+makeRow(document.getElementById('gGeo'),'swell','膨胀系数',1,3,.01);
+makeRow(document.getElementById('gGeo'),'thick','壁厚',.02,.3,.005);
+makeRow(document.getElementById('gMath'),'twist','扭曲强度',0,2.5,.01);
+makeRow(document.getElementById('gMath'),'waveAmp','波纹幅度',0,.3,.005);
+makeRow(document.getElementById('gMath'),'waveFreq','波纹频率',1,12,.1);
+makeRow(document.getElementById('gMath'),'spike','尖刺/折叠强度',0,1,.01);
+makeRow(document.getElementById('gSeg'),'radial','径向分段',16,160,1);
+makeRow(document.getElementById('gSeg'),'heightSeg','高度分段',12,120,1);
+makeRow(document.getElementById('gMat'),'hue','色相',0,1,.01);
+makeRow(document.getElementById('gMat'),'metal','金属感',0,1,.01);
+makeRow(document.getElementById('gMat'),'rough','粗糙度',0,1,.01);
+
+const sel=document.getElementById('modeSel');
+Object.keys(MODES).forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;sel.appendChild(o);});
+function syncUI(){
+  for(const k in rows){rows[k].r.value=P[k];rows[k].n.value=P[k];}
+  document.getElementById('modeDesc').textContent=MODES[P.mode].desc;
+  mat.color.setHSL(P.hue,.62,.55); mat.metalness=P.metal; mat.roughness=P.rough;
+}
+sel.onchange=()=>{P={...MODES[sel.value],mode:sel.value,solid:P.solid};syncUI();rebuild();};
+document.getElementById('wire').onchange=e=>mat.wireframe=e.target.checked;
+document.getElementById('solid').onchange=e=>{P.solid=e.target.checked;rebuild();};
+document.getElementById('randBtn').onclick=()=>{
+  const names=Object.keys(MODES);
+  sel.value=names[Math.floor(Math.random()*names.length)];
+  P={...MODES[sel.value],mode:sel.value,solid:P.solid};
+  ['twist','waveAmp','spike'].forEach(k=>{if(Math.random()<.6)P[k]=+(P[k]*(0.4+Math.random()*1.4)).toFixed(2);});
+  syncUI();rebuild();
+};
+let rot=true;
+document.getElementById('rotBtn').onclick=e=>{rot=!rot;controls.autoRotate=rot;e.target.textContent='自动旋转：'+(rot?'开':'关');};
+controls.autoRotate=true; controls.autoRotateSpeed=2;
+document.getElementById('resetBtn').onclick=()=>{camera.position.set(4.2,3.4,5.2);controls.target.set(0,1.9,0);};
+const panel=document.getElementById('panel');
+document.getElementById('collapseBtn').onclick=()=>{
+  const h=panel.classList.toggle('hiddenM');
+  document.getElementById('collapseBtn').textContent=h?'展开 ▸':'收起 ▾';
+};
+document.getElementById('panelToggle').onclick=()=>panel.classList.toggle('hiddenM');
+if(matchMedia('(max-width:760px)').matches) panel.classList.add('hiddenM');
+
+/* ===== 导出 ===== */
+function save(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);}
+function scaledMesh(){ // 显示用原始单位，导出 ×80 = 毫米
+  const g=mesh.geometry.clone(); g.scale(80,80,80);
+  return new THREE.Mesh(g, mat.clone());
+}
+document.getElementById('expStl').onclick=()=>{
+  save(new Blob([new STLExporter().parse(scaledMesh(),{binary:true})],{type:'model/stl'}),'vase_lab.stl');};
+document.getElementById('expGlb').onclick=()=>{
+  const s=new THREE.Scene(); s.add(scaledMesh());
+  new GLTFExporter().parse(s,b=>save(new Blob([b],{type:'model/gltf-binary'}),'vase_lab.glb'),()=>{},{binary:true});};
+
+/* ===== 启动 ===== */
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);});
+(function loop(){requestAnimationFrame(loop);controls.update();renderer.render(scene,camera);})();
+syncUI(); rebuild();
+</script>
+</body>
+</html>
