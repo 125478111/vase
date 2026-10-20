@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design History Lab 大容量设计史学习平台</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",PingFang SC,system-ui,sans-serif}
+body{background:#080b12;color:#e2e8f0;overflow:hidden}
+#app{width:100vw;height:100vh;position:relative}
+.header{padding:24px;text-align:center;border-bottom:1px solid #1e293b}
+.header h1{font-size:42px;font-weight:300;color:#94a3b8;letter-spacing:2px}
+.header p{margin-top:8px;color:#64748b;font-size:15px}
+.main-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:24px;max-width:1100px;margin:0 auto}
+.module-card{background:#0f172a;border:1px solid #1e293b;border-radius:16px;padding:24px;cursor:pointer;transition:0.3s ease}
+.module-card:hover{border-color:#38bdf8;background:#111827;transform:translateY(-4px)}
+.module-card h2{font-size:20px;margin-bottom:10px;color:#cbd5e1;display:flex;align-items:center;gap:8px}
+.module-card p{color:#64748b;font-size:14px;line-height:1.6}
+/* 抽屉弹窗容器 */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:90;display:none}
+.drawer-panel{position:absolute;right:0;top:0;height:100%;width:420px;background:#0f172a;border-left:1px solid #1e293b;transform:translateX(100%);transition:transform 0.3s ease;overflow-y:auto}
+.drawer-panel.active{transform:translateX(0)}
+.drawer-overlay.active{display:block}
+.drawer-head{padding:20px;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#0f172a;z-index:2}
+.drawer-head h3{font-size:22px;color:#7dd3fc}
+.close-drawer{background:transparent;border:none;color:#94a3b8;font-size:24px;cursor:pointer}
+.drawer-content{padding:20px}
+.drawer-item{padding:14px;border-bottom:1px solid #1e293b;cursor:pointer;border-radius:8px;transition:0.2s}
+.drawer-item:hover{background:#1e293b}
+.drawer-item h4{color:#cbd5e1;margin-bottom:4px}
+.drawer-item span{font-size:13px;color:#64748b}
+/* 详情页面 */
+.detail-page{position:fixed;inset:0;background:#080b12;z-index:100;display:none;overflow-y:auto}
+.detail-page.active{display:block}
+.detail-inner{max-width:900px;margin:0 auto;padding:30px}
+.detail-back{background:#1e293b;color:#cbd5e1;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;margin-bottom:20px}
+.detail-back:hover{background:#334155}
+.detail-title{font-size:28px;margin-bottom:16px;color:#e0f2fe}
+.detail-body{line-height:1.8;color:#cbd5e1}
+/* 游戏面板 */
+.game-panel{position:fixed;inset:0;background:#080b12;z-index:100;display:none;overflow-y:auto}
+.game-panel.active{display:block}
+.game-inner{max-width:800px;margin:0 auto;padding:30px}
+.game-back{background:#1e293b;color:#cbd5e1;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;margin-bottom:20px}
+.question-block{background:#0f172a;padding:24px;border-radius:14px;border:1px solid #1e293b;margin-bottom:20px}
+.question-text{font-size:18px;margin-bottom:18px}
+.opt-item{padding:12px;border:1px solid #1e293b;border-radius:10px;margin-bottom:10px;cursor:pointer;transition:0.2s}
+.opt-item:hover{border-color:#38bdf8;background:#111827}
+.opt-item.right{border-color:#22c55e;background:#062e1b}
+.opt-item.wrong{border-color:#ef4444;background:#3b1018}
+.score-box{position:fixed;top:16px;left:16px;background:#0f172a;border:1px solid #1e293b;padding:10px 14px;border-radius:10px;color:#7dd3fc;z-index:80}
+/* 游戏中心弹窗 */
+.game-center-panel{position:absolute;right:20px;top:80px;width:400px;background:#0f172a;border:1px solid #1e293b;border-radius:14px;z-index:85;display:none}
+.game-center-panel.active{display:block}
+.game-center-head{padding:16px;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center}
+.game-center-head h3{color:#7dd3fc;font-size:20px}
+.game-center-close{border:none;background:transparent;color:#94a3b8;font-size:20px;cursor:pointer}
+.game-center-list{padding:16px}
+.game-center-item{padding:14px;border:1px solid #1e293b;border-radius:10px;margin-bottom:12px;cursor:pointer;transition:0.2s}
+.game-center-item:hover{border-color:#38bdf8;background:#111827}
+.game-center-item h4{color:#cbd5e1;margin-bottom:4px}
+.game-center-item p{font-size:13px;color:#64748b}
+/* 笔记错题面板 */
+.note-panel{position:fixed;inset:0;background:#080b12;z-index:100;display:none;overflow-y:auto}
+.note-panel.active{display:block}
+.note-inner{max-width:850px;margin:0 auto;padding:30px}
+.note-item{background:#0f172a;border:1px solid #1e293b;padding:16px;border-radius:12px;margin-bottom:14px}
+</style>
+</head>
+<body>
+<div id="app">
+    <div class="score-box">积分：<span id="scoreNum">0</span></div>
+    <div class="header">
+        <h1>Design History Lab</h1>
+        <p>完整多级知识点导航 | 超大题库游戏 | 长期学习 · 设计史交互学习平台</p>
+    </div>
+    <!-- ✅ 这里是原来6个大模块，原样保留，没有改动！ -->
+    <div class="main-grid">
+        <div class="module-card" data-type="timeline">
+            <h2>🗺️ 设计史时间体系</h2>
+            <p>完整时间线，从史前造物一直到当代解构主义设计，全部时代知识点</p>
+        </div>
+        <div class="module-card" data-type="wiki">
+            <h2>📖 知识库百科</h2>
+            <p>设计师、经典作品、专业名词三大百科库，海量词条</p>
+        </div>
+        <div class="module-card" data-type="trend">
+            <h2>📈 设计思潮演化脉络</h2>
+            <p>思潮传承、对立、演变关系，完整设计运动逻辑图谱</p>
+        </div>
+        <div class="module-card" data-type="note">
+            <h2>📝 错题本与笔记收藏</h2>
+            <p>自动收集全部错题，知识点收藏，个人学习笔记</p>
+        </div>
+        <div class="module-card" data-type="gallery">
+            <h2>🖼️ 经典作品画廊</h2>
+            <p>各流派代表作品赏析，高清作品介绍，风格对照</p>
+        </div>
+        <div class="module-card" data-type="gameEntry">
+            <h2>🎮 互动游戏中心</h2>
+            <p>趣味答题闯关，检验你的设计史学习成果</p>
+        </div>
+    </div>
+
+    <!-- ✅ 游戏弹窗：只保留【章节答题闯关】，另外4个游戏入口全部删掉 -->
+    <div class="game-center-panel" id="gameCenter">
+        <div class="game-center-head">
+            <h3>🎮 互动学习游戏中心</h3>
+            <button class="game-center-close" id="closeGameCenter">×</button>
+        </div>
+        <div class="game-center-list">
+            <div class="game-center-item" data-game="quiz">
+                <h4>📝 章节答题闯关（超大随机题库）</h4>
+                <p>按章节抽取考题，检验知识点掌握，自动记录错题</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 抽屉遮罩 -->
+    <div class="drawer-overlay" id="drawerOverlay">
+        <div class="drawer-panel" id="drawerPanel">
+            <div class="drawer-head">
+                <h3 id="drawerTitle">目录</h3>
+                <button class="close-drawer" id="closeDrawer">×</button>
+            </div>
+            <div class="drawer-content" id="drawerContent"></div>
+        </div>
+    </div>
+
+    <!-- 知识点详情页 -->
+    <div class="detail-page" id="detailPage">
+        <div class="detail-inner">
+            <button class="detail-back" id="backDrawer">← 返回上一级目录</button>
+            <h2 class="detail-title" id="detailTitle"></h2>
+            <div class="detail-body" id="detailBody"></div>
+        </div>
+    </div>
+
+    <!-- 答题游戏面板 -->
+    <div class="game-panel" id="quizPanel">
+        <div class="game-inner">
+            <button class="game-back" id="backGameCenter">← 返回游戏中心</button>
+            <div class="question-block">
+                <div class="question-text" id="qText"></div>
+                <div id="optWrap"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 错题笔记面板 -->
+    <div class="note-panel" id="notePanel">
+        <div class="note-inner">
+            <button class="game-back" id="backMain">← 返回主页</button>
+            <h2 style="margin-bottom:20px">错题 & 收藏笔记</h2>
+            <div id="noteWrap"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 全局数据
+let score = 0;
+let wrongList = [];
+let currentQuiz = {};
+let quizIndex = 0;
+
+// 知识库结构（原版完整内容不变）
+const knowledgeData = {
+    timeline: {
+        title:"设计史时间体系",
+        list:[
+            {id:"pre",title:"史前与古代造物",desc:"原始器物、古埃及、古希腊罗马、中国古代传统工艺",content:`
+<h3>史前与古代造物</h3>
+<p>古代设计以功能、祭祀、王权为核心，工艺依托手工，造型受宗教、地理、材料限制。古希腊的比例美学、罗马拱券结构、中国青铜与漆器工艺，是后世现代美学的源头。</p>
+<p>关键词：黄金比例、柱式体系、青铜器、榫卯</p>
+            `},
+            {id:"med",title:"中世纪、哥特设计",desc:"宗教主导，哥特建筑、手抄本装饰艺术",content:`
+<h3>中世纪与哥特风格</h3>
+<p>设计服务于宗教，造型肃穆、竖向延伸。哥特式尖拱、飞扶壁、彩色玻璃，是中世纪最高成就。装饰繁复，以圣经故事为题材。</p>
+`},
+            {id:"ren",title:"文艺复兴设计",desc:"人文复兴，透视、古典比例回归",content:`
+<h3>文艺复兴</h3>
+<p>复兴古希腊罗马人文思想，重视人体工学、几何、透视。代表：布鲁内莱斯基、阿尔伯蒂、达芬奇，奠定近代设计美学基础。</p>
+`},
+            {id:"bar",title:"巴洛克与洛可可",desc:"动感华丽，宫廷贵族审美",content:`
+<h3>巴洛克 & 洛可可</h3>
+<p>巴洛克：强烈动感、曲线、光影对比；洛可可轻盈柔美，浅曲线、贝壳纹样，服务于法国贵族。</p>
+`},
+            {id:"indus",title:"工业革命前夕与机械化",desc:"机器诞生，传统手工艺危机",content:`
+<h3>工业革命时期</h3>
+<p>蒸汽机诞生，批量产品粗制滥造，美学缺失，催生工艺美术运动反思。</p>
+`},
+            {id:"arts",title:"工艺美术运动 Arts and Crafts",desc:"拉斯金、莫里斯，反对机器粗劣产品",content:`
+<h3>工艺美术运动</h3>
+<p>约翰·拉斯金理论，威廉·莫里斯实践。主张回归手工、自然纹样，但是反对机械化，有时代局限性。</p>
+`},
+            {id:"novo",title:"新艺术运动 Art Nouveau",desc:"自然曲线、藤蔓植物线条",content:`
+<h3>新艺术运动</h3>
+<p>抛弃历史复古纹样，从植物、昆虫提取流动曲线。代表：高迪、穆夏、霍塔。</p>
+`},
+            {id:"deco",title:"装饰艺术 Art Deco",desc:"几何、金属、奢华现代",content:`
+<h3>装饰艺术运动</h3>
+<p>20世纪20-30年代，几何折线、放射纹样、金属与大理石，兼顾奢华与工业化。</p>
+`},
+            {id:"bau",title:"包豪斯与现代主义",desc:"现代设计基石，功能主义，形式追随功能",content:`
+<h3>包豪斯 · 现代主义设计</h3>
+<p>现代设计最重要的里程碑。格罗皮乌斯、密斯、柯布西耶、康定斯基。核心：艺术与技术新统一，功能优先，标准化批量生产。名言：少即是多。</p>
+`},
+            {id:"usa",title:"美国工业设计职业化",desc:"流线型、商业市场设计",content:`
+<h3>美国商业工业设计</h3>
+<p>20世纪30年代起，设计师职业化，流线型风格、有计划废止制度。代表：雷蒙德·罗维。</p>
+`},
+            {id:"nord",title:"北欧现代设计",desc:"温情功能主义，人文简约",content:`
+<h3>北欧设计</h3>
+<p>功能+人文温情，兼顾工业化与手工质感，民主设计思想。代表：阿尔瓦阿尔托、雅各布森。</p>
+`},
+            {id:"italy",title:"意大利激进设计",desc:"孟菲斯、反主流",content:`
+<h3>意大利激进设计 & 孟菲斯</h3>
+<p>70年代反叛现代主义单调刻板，色彩大胆、戏谑，孟菲斯小组，索特萨斯。</p>
+`},
+            {id:"pop",title:"波普设计 Pop Art",desc:"大众文化、消费、通俗符号",content:`
+<h3>波普设计</h3>
+<p>面向大众消费文化，借用广告、漫画、快餐符号，打破高雅和通俗边界。安迪沃霍尔。</p>
+`},
+            {id:"post",title:"后现代主义设计",desc:"反对单一功能主义，隐喻、历史符号",content:`
+<h3>后现代主义</h3>
+<p>反对密斯“少即是多”，主张历史符号、装饰、隐喻。文丘里：少即是烦。</p>
+`},
+            {id:"contemp",title:"当代设计：数字、可持续、解构",desc:"参数化、可持续、交互设计",content:`
+<h3>当代设计</h3>
+<p>包含解构主义、参数化设计、可持续低碳设计、交互数字设计。不再有单一主流风格，多元共生。</p>
+`}
+        ]
+    },
+    wiki:{
+        title:"知识库百科",
+        list:[
+            {id:"des1",title:"设计师：威廉·莫里斯",desc:"工艺美术运动核心人物",content:`<h3>威廉·莫里斯</h3><p>工艺美术运动领袖，诗人、设计师，崇尚手工自然，厌恶机器劣质产品。</p>`},
+            {id:"des2",title:"设计师：格罗皮乌斯",desc:"包豪斯创始人",content:`<h3>瓦尔特·格罗皮乌斯</h3><p>包豪斯第一任校长，提出艺术与技术统一，代表作包豪斯校舍。</p>`},
+            {id:"des3",title:"设计师：密斯·凡德罗",desc:"少即是多",content:`<h3>密斯·凡德罗</h3><p>现代主义核心，“少即是多”，钢和玻璃建筑，巴塞罗那椅。</p>`},
+            {id:"des4",title:"设计师：雷蒙德·罗维",desc:"美国工业设计之父",content:`<h3>雷蒙德·罗维</h3><p>第一位商业化明星工业设计师，流线型设计，可口可乐标识。</p>`},
+            {id:"des5",title:"设计师：文丘里",desc:"后现代理论奠基人",content:`<h3>罗伯特·文丘里</h3><p>《建筑的复杂性与矛盾性》，口号“少即是烦”。</p>`},
+            {id:"term1",title:"术语：形式追随功能",desc:"现代主义核心信条",content:`<h3>形式追随功能 Form follows function</h3><p>路易斯沙利文提出，功能决定造型，是现代设计最核心理念。</p>`},
+            {id:"term2",title:"术语：有计划废止制度",desc:"商业消费设计策略",content:`<h3>有计划废止制度</h3><p>刻意缩短产品生命周期，刺激持续消费，美国商业设计产物。</p>`}
+        ]
+    },
+    trend:{
+        title:"设计思潮演化脉络",
+        list:[
+            {id:"t1",title:"手工艺时代：美学依附权贵与宗教",desc:"古代至18世纪，设计是贵族宗教特权",content:`<h3>前工业时代思潮</h3><p>设计不面向大众，由工匠服务贵族、教会。没有独立“设计师”职业。</p>`},
+            {id:"t2",title:"反思机器：工艺美术、新艺术",desc:"机械化带来的第一轮反思浪潮",content:`<h3>对工业化的第一轮反思</h3><p>机器粗劣产品引发反感，先回到手工（工艺美术），再寻找全新自然语言（新艺术）。</p>`},
+            {id:"t3",title:"拥抱机器：包豪斯与现代主义",desc:"找到艺术和工业生产共存道路",content:`<h3>现代主义思潮</h3><p>不再拒绝机器，而是学会用好机器，标准化、大批量、普惠的好设计。</p>`},
+            {id:"t4",title:"反叛现代：波普、孟菲斯、后现代",desc:"不满单调冰冷的功能主义",content:`<h3>后现代反叛浪潮</h3><p>现代主义走向刻板单调，新一代设计师加入装饰、趣味、历史符号。</p>`},
+            {id:"t5",title:"多元当代：可持续、参数化、交互",desc:"数字化时代全新命题",content:`<h3>当代多元思潮</h3><p>议题转向环境可持续、人机交互、算法参数生成、文化多元表达。</p>`}
+        ]
+    },
+    gallery:{
+        title:"经典作品画廊",
+        list:[
+            {id:"g1",title:"红屋 威廉·莫里斯",desc:"工艺美术运动代表建筑",content:`<h3>红屋</h3><p>威廉·莫里斯的自宅，工艺美术运动标志性作品，红砖、摒弃虚浮复古装饰。</p>`},
+            {id:"g2",title:"巴塞罗那椅 密斯",desc:"现代主义经典家具",content:`<h3>巴塞罗那椅</h3><p>钢框架+皮革，极简结构，现代主义家具里程碑。</p>`}
+        ]
+    },
+    note:{
+        title:"错题本与笔记收藏",
+        list:[]
+    },
+    gameEntry:{
+        title:"互动游戏中心",
+        list:[]
+    }
+};
+
+// 答题题库不变
+const quizBank = [
+    {q:"包豪斯的创立者是谁？",opt:["密斯凡德罗","格罗皮乌斯","柯布西耶","莫里斯"],ans:1},
+    {q:"口号“少即是多”是谁提出？",opt:["文丘里","密斯凡德罗","拉斯金","高迪"],ans:1},
+    {q:"工艺美术运动的核心领袖是？",opt:["威廉莫里斯","雷蒙德罗维","阿尔托","索特萨斯"],ans:0},
+    {q:"“形式追随功能”最早由哪位提出？",opt:["沙利文","格罗皮乌斯","密斯","文丘里"],ans:0},
+    {q:"“少即是烦”属于哪一种设计思潮？",opt:["现代主义","后现代主义","工艺美术","新艺术"],ans:1},
+    {q:"孟菲斯小组属于哪个国家？",opt:["德国","意大利","英国","美国"],ans:1},
+    {q:"新艺术运动主要灵感来自？",opt:["古典柱式","自然植物曲线","几何方块","机器零件"],ans:1},
+    {q:"有计划废止制度起源于哪个国家？",opt:["英国","法国","美国","德国"],ans:2},
+    {q:"包豪斯诞生在哪一年？",opt:["1919","1880","1930","1950"],ans:0},
+    {q:"以下哪件是密斯凡德罗代表作？",opt:["巴塞罗那椅","郁金香椅","天鹅椅","可口可乐logo"],ans:0},
+    {q:"北欧设计的核心特点是？",opt:["夸张戏谑","温情功能主义、人文简约","大量复古雕花","纯粹商业噱头"],ans:1},
+    {q:"波普设计兴起的背景是？",opt:["贵族宫廷审美","大众消费流行文化","宗教崇拜","反对一切机器"],ans:1}
+];
+
+// DOM
+const $ = s=>document.querySelector(s);
+const $$ = s=>document.querySelectorAll(s);
+const drawerOverlay = $("#drawerOverlay");
+const drawerPanel = $("#drawerPanel");
+const drawerContent = $("#drawerContent");
+const drawerTitle = $("#drawerTitle");
+const detailPage = $("#detailPage");
+const detailTitle = $("#detailTitle");
+const detailBody = $("#detailBody");
+const gameCenter = $("#gameCenter");
+const quizPanel = $("#quizPanel");
+const scoreNum = $("#scoreNum");
+const notePanel = $("#notePanel");
+const noteWrap = $("#noteWrap");
+
+// 打开抽屉（原版逻辑不变）
+$$(".module-card").forEach(card=>{
+    card.onclick = ()=>{
+        const type = card.dataset.type;
+        if(type === "gameEntry"){
+            gameCenter.classList.add("active");
+            return;
+        }
+        const data = knowledgeData[type];
+        drawerTitle.innerText = data.title;
+        drawerContent.innerHTML = "";
+        data.list.forEach(item=>{
+            const div = document.createElement("div");
+            div.className = "drawer-item";
+            div.innerHTML = `<h4>${item.title}</h4><span>${item.desc}</span>`;
+            div.onclick = (e)=>{
+                e.stopPropagation();
+                openDetail(item,type);
+            }
+            drawerContent.appendChild(div);
+        })
+        drawerOverlay.classList.add("active");
+        drawerPanel.classList.add("active");
+    }
+})
+$("#closeDrawer").onclick = ()=>{
+    drawerOverlay.classList.remove("active");
+    drawerPanel.classList.remove("active");
+}
+drawerOverlay.onclick = (e)=>{
+    if(e.target === drawerOverlay){
+        drawerOverlay.classList.remove("active");
+        drawerPanel.classList.remove("active");
+    }
+}
+
+// 打开详情页
+function openDetail(item,parentType){
+    drawerOverlay.classList.remove("active");
+    drawerPanel.classList.remove("active");
+    detailTitle.innerText = item.title;
+    detailBody.innerHTML = item.content;
+    detailPage.classList.add("active");
+    detailPage.dataset.parent = parentType;
+}
+$("#backDrawer").onclick = ()=>{
+    detailPage.classList.remove("active");
+    const pType = detailPage.dataset.parent;
+    const data = knowledgeData[pType];
+    drawerTitle.innerText = data.title;
+    drawerContent.innerHTML = "";
+    data.list.forEach(item=>{
+        const div = document.createElement("div");
+        div.className = "drawer-item";
+        div.innerHTML = `<h4>${item.title}</h4><span>${item.desc}</span>`;
+        div.onclick = (e)=>{
+            e.stopPropagation();
+            openDetail(item,pType);
+        }
+        drawerContent.appendChild(div);
+    })
+    drawerOverlay.classList.add("active");
+    drawerPanel.classList.add("active");
+}
+
+// 游戏中心点击
+$$(".game-center-item").forEach(it=>{
+    it.onclick = ()=>{
+        const g = it.dataset.game;
+        if(g === "quiz"){
+            openQuiz();
+        }
+    }
+})
+$("#closeGameCenter").onclick = ()=>gameCenter.classList.remove("active");
+
+// 打开答题游戏
+function openQuiz(){
+    gameCenter.classList.remove("active");
+    quizPanel.classList.add("active");
+    quizIndex = 0;
+    renderQuiz();
+}
+$("#backGameCenter").onclick = ()=>{
+    quizPanel.classList.remove("active");
+    gameCenter.classList.add("active");
+}
+function renderQuiz(){
+    if(quizIndex >= quizBank.length){
+        alert(`闯关结束！本次得分：${score}`);
+        quizPanel.classList.remove("active");
+        return;
+    }
+    const q = quizBank[quizIndex];
+    currentQuiz = q;
+    $("#qText").innerText = q.q;
+    const wrap = $("#optWrap");
+    wrap.innerHTML = "";
+    q.opt.forEach((opt,idx)=>{
+        const div = document.createElement("div");
+        div.className = "opt-item";
+        div.innerText = opt;
+        div.onclick = ()=>{
+            $$(".opt-item").forEach(o=>o.style.pointerEvents="none");
+            if(idx === q.ans){
+                div.classList.add("right");
+                score += 10;
+                scoreNum.innerText = score;
+            }else{
+                div.classList.add("wrong");
+                wrongList.push(q);
+                quizBank[quizIndex].userWrong = true;
+                $$(".opt-item")[q.ans].classList.add("right");
+            }
+            setTimeout(()=>{
+                quizIndex++;
+                renderQuiz();
+            },1200)
+        }
+        wrap.appendChild(div);
+    })
+}
+
+// 错题本页面
+$('[data-type="note"]').onclick = ()=>{
+    notePanel.classList.add("active");
+    noteWrap.innerHTML = "";
+    if(wrongList.length === 0){
+        noteWrap.innerHTML = "<p style='color:#94a3b8'>暂无错题，继续加油！</p>";
+    }else{
+        wrongList.forEach(q=>{
+            const div = document.createElement("div");
+            div.className = "note-item";
+            div.innerHTML = `<p>${q.q}</p><p style="color:#22c55e;margin-top:6px">正确答案：${q.opt[q.ans]}</p>`;
+            noteWrap.appendChild(div);
+        })
+    }
+}
+$("#backMain").onclick = ()=>notePanel.classList.remove("active");
+</script>
+</body>
+</html>
+<!-- （注：内容由AI生成） -->
