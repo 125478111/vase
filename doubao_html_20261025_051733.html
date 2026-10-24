@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Design History Lab｜设计史交互学习平台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        bgWarm: '#FFF9E3',
+        textMain: '#3A3A3A',
+        accentBrown: '#9A6B43',
+        hintGreen: '#B8D4B0',
+        hintOrange: '#F2C894'
+      },
+      fontFamily: {
+        serif: ['"Noto Serif SC"', 'serif'],
+        inter: ['Inter', 'sans-serif']
+      }
+    }
+  }
+}
+</script>
+<style>
+*{box-sizing:border-box}
+body{background-color:#FFF9E3;color:#3A3A3A;font-family:'Noto Serif SC',serif}
+
+/* 真正横向时间长廊 */
+.timeline-outer{
+  width:100%;
+  overflow-x:auto;
+  overflow-y:hidden;
+  background:#FFF9E3;
+  border-top:1px dashed #9A6B4333;
+  border-bottom:1px dashed #9A6B4333;
+  padding:40px 0;
+  cursor:grab;
+}
+.timeline-outer:active{cursor:grabbing}
+.timeline-inner-wrap{
+  position:relative;
+  width:4800px;
+  min-height:340px;
+}
+
+/* 底部连续时间线 */
+.timeline-scale{
+  position:absolute;
+  left:0;right:0;bottom:24px;height:60px;z-index:0
+}
+.scale-line{
+  position:absolute;left:0;right:0;top:50%;height:3px;background:#9A6B4366;transform:translateY(-50%)
+}
+.scale-labels{
+  position:absolute;left:0;right:0;top:0;bottom:0;display:flex;justify-content:space-between;padding:0 120px
+}
+.scale-label{
+  position:relative;font-size:12px;color:#9A6B43;text-align:center
+}
+.scale-label::before{
+  content:"";position:absolute;left:50%;top:24px;width:1px;height:10px;background:#9A6B4366;transform:translateX(-50%)
+}
+
+/* 节点卡片 */
+.timeline-cards{
+  position:relative;z-index:1;display:flex;gap:24px;padding:0 120px 80px
+}
+.card-node{
+  flex:0 0 240px;background:#fff;border-radius:16px;padding:18px;box-shadow:0 4px 16px rgba(154,107,67,.08);transition:.3s;cursor:pointer;position:relative;top:20px
+}
+.card-node:hover{transform:translateY(-6px);box-shadow:0 10px 24px rgba(154,107,67,.14)}
+.year-tag{
+  display:inline-block;background:#9A6B43;color:#fff;font-size:12px;padding:2px 8px;border-radius:999px;margin-bottom:8px
+}
+
+/* 作品图鉴卡片 */
+.gallery-card{
+  background:#fff;border-radius:14px;padding:14px;box-shadow:0 3px 12px rgba(154,107,67,.07);cursor:pointer;transition:.25s
+}
+.gallery-card:hover{transform:translateY(-3px);box-shadow:0 6px 18px rgba(154,107,67,.11)}
+
+/* 弹窗 */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:99}
+.modal-content{background:#FFF9E3;border-radius:20px;max-width:720px;width:92%;max-height:85vh;overflow-y:auto;padding:24px}
+
+/* 游戏画布 */
+.canvas-game{background:#fff;border-radius:16px;box-shadow:0 4px 16px rgba(154,107,67,.08)}
+.question-popup{position:absolute;background:#fff;border-radius:12px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:10;max-width:380px}
+
+/* 徽章 */
+.badge{width:44px;height:44px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:18px;background:#fff;box-shadow:0 2px 8px rgba(154,107,67,.15)}
+.badge.unlock{background:#F2C894;color:#fff}
+
+/* 手机端纵向时间轴 */
+@media (max-width:768px){
+  .timeline-outer{overflow-x:hidden;overflow-y:auto;cursor:default}
+  .timeline-inner-wrap{width:100%;min-height:auto}
+  .timeline-scale{left:24px;right:auto;top:0;bottom:0;width:3px;height:auto;background:#9A6B4366}
+  .scale-line{width:3px;height:100%;left:50%;top:0;transform:translateX(-50%)}
+  .scale-labels{flex-direction:column;padding:12px 0 12px 48px}
+  .scale-label::before{left:-24px;top:50%;width:10px;height:1px;transform:translateY(-50%)}
+  .timeline-cards{flex-direction:column;padding:12px 24px 40px 48px}
+  .card-node{flex:1 1 auto;width:100%;top:0}
+}
+</style>
+</head>
+<body>
+
+<!-- 首页 -->
+<section id="page-home" class="min-h-screen flex flex-col items-center justify-center px-6 py-16">
+  <h1 class="text-[clamp(2.4rem,6vw,4rem)] font-serif font-semibold text-accentBrown">Design History Lab</h1>
+  <p class="mt-3 text-lg text-textMain/80 max-w-xl text-center">漫游设计长河，看见设计演进的力量</p>
+  <div class="mt-8 flex flex-wrap gap-4 justify-center">
+    <button onclick="openTimeline()" class="px-6 py-3 rounded-full bg-accentBrown text-white">🕰️ 时间长廊</button>
+    <button onclick="openGallery()" class="px-6 py-3 rounded-full border border-accentBrown text-accentBrown">🖼️ 作品图鉴</button>
+    <button onclick="openCompare()" class="px-6 py-3 rounded-full border border-accentBrown text-accentBrown">⚖️ 流派对比</button>
+    <button onclick="openGameHub()" class="px-6 py-3 rounded-full border border-accentBrown text-accentBrown">🎮 游戏中心</button>
+  </div>
+  <div class="mt-10">
+    <p class="text-sm text-textMain/70 mb-2">🏆 时光徽章收集墙</p>
+    <div id="badgeWall" class="flex gap-2 flex-wrap justify-center"></div>
+  </div>
+</section>
+
+<!-- 时间长廊页 -->
+<section id="page-timeline" class="hidden py-10">
+  <div class="px-6 flex justify-between items-center mb-4">
+    <h2 class="text-xl font-serif text-accentBrown">🕰️ 时间长廊（按住鼠标左右拖动）</h2>
+    <button onclick="backHome()" class="text-accentBrown">← 返回首页</button>
+  </div>
+
+  <div class="timeline-outer">
+    <div class="timeline-inner-wrap">
+      <div class="timeline-scale">
+        <div class="scale-line"></div>
+        <div id="scaleLabels" class="scale-labels"></div>
+      </div>
+      <div id="timelineInner" class="timeline-cards"></div>
+    </div>
+  </div>
+
+  <div class="px-6 mt-6 flex justify-between text-xs text-textMain/70">
+    <span>← 更早时期</span>
+    <span>更近时期 →</span>
+  </div>
+
+  <div class="px-6 mt-6 max-w-5xl mx-auto bg-white rounded-xl p-5 shadow-sm">
+    <h3 class="text-accentBrown font-serif mb-2">📈 当代设计发展力度看板</h3>
+    <p class="text-sm text-textMain/80">从手工时代缓慢摸索，工业革命加速变革，数字时代、参数化、AI生成设计到来，设计迭代速度陡峭上升，创作门槛降低、创意边界持续拓宽，设计正在进入爆发式发展阶段。</p>
+  </div>
+</section>
+
+<!-- 作品图鉴页 -->
+<section id="page-gallery" class="hidden min-h-screen px-6 py-10">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-xl font-serif text-accentBrown">🖼️ 作品图鉴</h2>
+    <button onclick="backHome()" class="text-accentBrown">← 返回首页</button>
+  </div>
+  <div class="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" id="galleryWrap"></div>
+</section>
+
+<!-- 流派对比页 -->
+<section id="page-compare" class="hidden min-h-screen px-6 py-10">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-xl font-serif text-accentBrown">⚖️ 流派对比台</h2>
+    <button onclick="backHome()" class="text-accentBrown">← 返回首页</button>
+  </div>
+  <div class="max-w-4xl mx-auto">
+    <div class="grid grid-cols-2 gap-4">
+      <select id="compareA" onchange="renderCompare()" class="px-4 py-3 rounded-xl bg-white border border-accentBrown/40"></select>
+      <select id="compareB" onchange="renderCompare()" class="px-4 py-3 rounded-xl bg-white border border-accentBrown/40"></select>
+    </div>
+    <div id="compareBox" class="mt-6 bg-white rounded-xl p-6 shadow-sm"></div>
+  </div>
+</section>
+
+<!-- 游戏中心 -->
+<section id="page-gamehub" class="hidden min-h-screen px-6 py-10">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-xl font-serif text-accentBrown">🎮 游戏中心</h2>
+    <button onclick="backHome()" class="text-accentBrown">← 返回首页</button>
+  </div>
+  <div class="max-w-2xl mx-auto space-y-6">
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-serif text-accentBrown text-lg">流派对战竞技场｜双人同屏</h3>
+      <p class="text-sm text-textMain/80 mt-1">玩家1：格罗皮乌斯（包豪斯）｜玩家2：里特维尔德（风格派）。按攻击键弹出考题，答对发射炮弹攻击对方！</p>
+      <div class="text-xs mt-2 text-textMain/70">操作：玩家1 Q键攻击；玩家2 P键攻击</div>
+      <button onclick="openBattleGame()" class="mt-3 px-4 py-2 rounded-full bg-accentBrown text-white text-sm">开始对战</button>
+    </div>
+    <div class="bg-white rounded-xl p-5 shadow-sm">
+      <h3 class="font-serif text-accentBrown text-lg">冰火人设计史大冒险｜双人横版闯关</h3>
+      <p class="text-sm text-textMain/80 mt-1">🔵蓝冰娃只能踩水平台，🔴红火娃只能踩火焰平台，收集钻石解锁考题，双人一起抵达终点门通关！</p>
+      <div class="text-xs mt-2 text-textMain/70">操作：蓝冰娃 A/D移动 W跳跃；红火娃 ← →移动 ↑跳跃</div>
+      <button onclick="openPlatformGame()" class="mt-3 px-4 py-2 rounded-full bg-accentBrown text-white text-sm">开启冒险</button>
+    </div>
+  </div>
+</section>
+
+<!-- 双人对战页 -->
+<section id="page-battlegame" class="hidden min-h-screen px-6 py-10">
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-xl font-serif text-accentBrown">流派对战竞技场</h2>
+    <button onclick="openGameHub()" class="text-accentBrown">← 返回游戏中心</button>
+  </div>
+  <div class="max-w-4xl mx-auto relative">
+    <canvas id="battleCanvas" width="800" height="420" class="canvas-game w-full"></canvas>
+    <div id="battleTip" class="mt-4 p-3 bg-white rounded-lg text-sm"></div>
+    <div id="battleQuestionBox" class="question-popup hidden" style="top:130px;left:50%;transform:translateX(-50%)">
+      <div id="qText" class="mb-3"></div>
+      <div id="qOptions" class="space-y-2"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 横版闯关页（改为冰火人） -->
+<section id="page-platformgame" class="hidden min-h-screen px-6 py-10">
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-xl font-serif text-accentBrown">冰火人设计史大冒险</h2>
+    <button onclick="openGameHub()" class="text-accentBrown">← 返回游戏中心</button>
+  </div>
+  <div class="max-w-4xl mx-auto relative">
+    <canvas id="platformCanvas" width="800" height="420" class="canvas-game w-full"></canvas>
+    <div id="platformTip" class="mt-4 p-3 bg-white rounded-lg text-sm"></div>
+    <div id="platformQuestionBox" class="question-popup hidden" style="top:120px;left:50%;transform:translateX(-50%)">
+      <div class="flex justify-between items-start gap-3">
+        <div id="pqText" class="text-sm"></div>
+        <button onclick="closePlatPopup()" class="text-accentBrown font-bold">✕</button>
+      </div>
+      <div id="pqOptions" class="mt-3 space-y-2"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 详情弹窗容器 -->
+<div id="modalContainer" class="hidden"></div>
+
+<script>
+// ===================== 全局知识库 =====================
+const designData = [
+  {key:"artsandcrafts",year:"1860",name:"工艺美术运动",summary:"反对工业化粗劣量产产品，复兴传统手工艺，崇尚自然植物纹样。",background:"第一次工业革命后机器制品粗糙廉价，艺术家希望找回手工温度。",idea:"手工艺复兴、自然装饰、材料真实。",feature:"植物纹样、木质、质朴肌理。",people:"威廉·莫里斯",work:"红屋、《吉尼维尔》挂毯",relation:"启发新艺术运动。",bgColor:"#E8E2D0"},
+  {key:"artnouveau",year:"1890",name:"新艺术运动",summary:"抛弃历史复古样式，以流动自然曲线、藤蔓花草为核心。",background:"艺术家想创造属于当下时代的全新装饰语言。",idea:"摆脱古典复古，师法自然。",feature:"卷曲藤蔓、花卉、金属线条。",people:"高迪、穆夏",work:"米拉之家、穆夏四季系列",relation:"承接工艺美术，后被装饰艺术取代。",bgColor:"#D8E6DD"},
+  {key:"viennasec",year:"1897",name:"维也纳分离派",summary:"与新艺术同期，主张脱离学院派，走向简洁几何化。",background:"奥地利艺术家不满保守学院艺术。",idea:"去繁复装饰、简洁几何。",feature:"直线、对称几何、金属装饰板。",people:"克里姆特",work:"《吻》",relation:"衔接新艺术与现代主义。",bgColor:"#E4DDE9"},
+  {key:"deStijl",year:"1917",name:"荷兰风格派",summary:"水平垂直直线分割，红黄蓝三原色加黑白灰。",background:"荷兰追求理性、秩序的精神表达。",idea:"纯粹造型、水平垂直构图。",feature:"直线块面、红黄蓝。",people:"里特维尔德、蒙德里安",work:"红蓝椅、施罗德住宅",relation:"与包豪斯互相交流。",bgColor:"#F0ECE6"},
+  {key:"bauhaus",year:"1919",name:"包豪斯",summary:"艺术与技术新统一，现代设计教育基石，功能优先。",background:"一战后德国重建，需要适合工业化生产的设计体系。",idea:"形式追随功能、艺术与技术统一。",feature:"纯粹几何、原色、钢管。",people:"格罗皮乌斯、密斯、康定斯基",work:"瓦西里椅、巴塞罗那椅",relation:"深刻影响现代主义。",bgColor:"#E6E8ED"},
+  {key:"artdeco",year:"1920",name:"装饰艺术运动",summary:"几何、奢华、金属感，融合工业化美学与精致装饰。",background:"一战后经济繁荣，大众追求时髦。",idea:"几何对称、赞美工业时代。",feature:"阶梯几何、放射线条、亮面金属。",people:"拉里克",work:"克莱斯勒大厦",relation:"介于新艺术与现代主义之间。",bgColor:"#E2D8D0"},
+  {key:"constructivism",year:"1920",name:"构成主义",summary:"用工业材料、几何结构表达革命精神。",background:"俄国先锋艺术浪潮。",idea:"艺术服务社会、工业材料。",feature:"金属构件、几何框架。",people:"塔特林",work:"第三国际纪念塔",relation:"与包豪斯交流。",bgColor:"#ECE4E4"},
+  {key:"modernism",year:"1940",name:"现代主义设计",summary:"理性、功能优先，服务大众，低成本工业化设计。",background:"二战重建，住房短缺。",idea:"少即是多，功能优先。",feature:"简洁几何、平整立面。",people:"密斯·凡德罗",work:"巴塞罗那馆",relation:"包豪斯理念战后延续。",bgColor:"#E7E9EC"},
+  {key:"organic",year:"1950",name:"有机现代主义",summary:"现代主义分支，柔和曲线，兼顾功能与温暖。",background:"大众厌倦冰冷的现代主义。",idea:"功能加有机自然形态。",feature:"流畅曲线、塑料与木材结合。",people:"伊姆斯夫妇",work:"伊姆斯休闲椅",relation:"现代主义温情分支。",bgColor:"#E8E6E0"},
+  {key:"pop",year:"1960",name:"波普设计",summary:"拥抱大众消费文化，鲜艳通俗，打破精英审美。",background:"战后消费社会兴起。",idea:"通俗、娱乐化、复制流行符号。",feature:"高饱和色彩、卡通、广告符号。",people:"安迪·沃霍尔",work:"金宝汤罐头",relation:"反叛现代主义。",bgColor:"#F3E2E9"},
+  {key:"postmodern",year:"1970",name:"后现代主义",summary:"调侃历史符号，打破单一理性，趣味多元。",background:"现代主义千篇一律。",idea:"历史符号拼贴、幽默。",feature:"混搭古典元素、夸张造型。",people:"文丘里",work:"栗子山住宅",relation:"对抗现代主义霸权。",bgColor:"#EAE4F0"},
+  {key:"hightech",year:"1975",name:"高技派",summary:"直白暴露建筑结构与管线，赞美工业技术。",background:"工业技术高速发展。",idea:"结构即美学。",feature:"钢结构、外露管线。",people:"罗杰斯",work:"蓬皮杜中心",relation:"现代主义延伸。",bgColor:"#E4E8ED"},
+  {key:"decon",year:"1980",name:"解构主义",summary:"破碎、错位、打散秩序，拒绝稳定均衡。",background:"哲学思潮影响。",idea:"破碎失衡、冲突。",feature:"倾斜穿插、不对称。",people:"盖里",work:"古根海姆毕尔巴鄂博物馆",relation:"反叛现代主义秩序。",bgColor:"#E9E4E4"},
+  {key:"digital",year:"2000",name:"数字/参数化设计",summary:"算法驱动造型，复杂曲面，计算机生成形态。",background:"计算机图形学普及。",idea:"参数可控、复杂曲面。",feature:"流动曲面、算法肌理。",people:"扎哈",work:"广州大剧院",relation:"AI设计前置阶段。",bgColor:"#E4EAF0"},
+  {key:"ai",year:"2020",name:"AI生成设计",summary:"人机协同生成，快速迭代创意，拓展设计边界。",background:"大模型人工智能爆发。",idea:"人机共创、快速迭代。",feature:"多元风格融合、快速生成。",people:"众多创作者",work:"AI视觉、生成建筑方案",relation:"当前高速发展方向。",bgColor:"#F0F0F0"}
+];
+
+const questionBank = [
+  {q:"包豪斯的核心口号是？",opt:["装饰即是美","艺术与技术新统一","越多细节越好","复古优先"],ans:1,belong:"bauhaus"},
+  {q:"红蓝椅是谁的作品？",opt:["里特维尔德","格罗皮乌斯","密斯","威廉·莫里斯"],ans:0,belong:"deStijl"},
+  {q:"“少即是多”是谁提出？",opt:["蒙德里安","密斯·凡德罗","文丘里","高迪"],ans:1,belong:"modernism"},
+  {q:"工艺美术运动代表人物？",opt:["威廉·莫里斯","安迪·沃霍尔","里特维尔德","康定斯基"],ans:0,belong:"artsandcrafts"},
+  {q:"风格派使用哪组原色？",opt:["红绿蓝","红黄蓝","青品黄","黑白灰"],ans:1,belong:"deStijl"},
+  {q:"波普设计起源于？",opt:["消费流行文化","手工艺复兴","古典建筑","军工设计"],ans:0,belong:"pop"},
+  {q:"后现代主义主要反对谁？",opt:["现代主义","工艺美术","新艺术运动","风格派"],ans:0,belong:"postmodern"},
+  {q:"新艺术运动典型造型特征？",opt:["流动自然曲线","严格直线","方块拼接","纯色平涂"],ans:0,belong:"artnouveau"},
+  {q:"第三国际纪念塔属于哪个流派？",opt:["构成主义","包豪斯","风格派","波普"],ans:0,belong:"constructivism"},
+  {q:"蓬皮杜中心属于？",opt:["高技派","后现代","工艺美术","新艺术"],ans:0,belong:"hightech"}
+];
+
+// ===================== 徽章系统 =====================
+let badgeList = JSON.parse(localStorage.getItem('designLabBadge') || '[]');
+function renderBadgeWall(){
+  const wall = document.getElementById('badgeWall');
+  wall.innerHTML = '';
+  designData.forEach((item,idx)=>{
+    const span = document.createElement('span');
+    span.className = 'badge '+(badgeList.includes(item.key)?'unlock':'');
+    span.innerText = idx+1;
+    wall.appendChild(span);
+  })
+}
+function unlockBadge(key){
+  if(!badgeList.includes(key)){
+    badgeList.push(key);
+    localStorage.setItem('designLabBadge',JSON.stringify(badgeList));
+    renderBadgeWall();
+  }
+}
+
+// ===================== 页面切换 =====================
+function hideAll(){
+  document.querySelectorAll('section').forEach(s=>s.classList.add('hidden'));
+  document.getElementById('modalContainer').classList.add('hidden');
+}
+function backHome(){hideAll();document.getElementById('page-home').classList.remove('hidden')}
+function openTimeline(){hideAll();document.getElementById('page-timeline').classList.remove('hidden');renderTimeline()}
+function openGallery(){hideAll();document.getElementById('page-gallery').classList.remove('hidden');renderGallery()}
+function openCompare(){hideAll();document.getElementById('page-compare').classList.remove('hidden');initCompareSelect()}
+function openGameHub(){hideAll();document.getElementById('page-gamehub').classList.remove('hidden')}
+function openBattleGame(){hideAll();document.getElementById('page-battlegame').classList.remove('hidden');initBattleCanvas()}
+function openPlatformGame(){hideAll();document.getElementById('page-platformgame').classList.remove('hidden');initPlatformCanvas()}
+
+// ===================== 时间长廊：真正横向长卷轴 =====================
+function renderTimeline(){
+  const wrap = document.getElementById('timelineInner');
+  const scaleWrap = document.getElementById('scaleLabels');
+  wrap.innerHTML = '';
+  scaleWrap.innerHTML = '';
+
+  const nodes = [
+    {year:"1860",key:"artsandcrafts"},
+    {year:"1890",key:"artnouveau"},
+    {year:"1897",key:"viennasec"},
+    {year:"1917",key:"deStijl"},
+    {year:"1919",key:"bauhaus"},
+    {year:"1920",key:"artdeco"},
+    {year:"1920",key:"constructivism"},
+    {year:"1940",key:"modernism"},
+    {year:"1950",key:"organic"},
+    {year:"1960",key:"pop"},
+    {year:"1970",key:"postmodern"},
+    {year:"1975",key:"hightech"},
+    {year:"1980",key:"decon"},
+    {year:"2000",key:"digital"},
+    {year:"2020",key:"ai"}
+  ];
+
+  // 底部年份刻度
+  ["1860","1880","1900","1920","1940","1960","1980","2000","2020"].forEach(y=>{
+    const label = document.createElement('div');
+    label.className = 'scale-label';
+    label.innerText = y;
+    scaleWrap.appendChild(label);
+  });
+
+  // 节点卡片
+  nodes.forEach(item=>{
+    const data = designData.find(d=>d.key===item.key);
+    const div = document.createElement('div');
+    div.className = 'card-node';
+    div.innerHTML = `
+      <div class="year-tag">${data.year}</div>
+      <h3 class="font-serif text-accentBrown text-base">${data.name}</h3>
+      <p class="text-xs mt-2 text-textMain/80">${data.summary}</p>
+      <div class="mt-3 text-xs text-accentBrown">点击查看详情 →</div>
+    `;
+    div.onclick = ()=>openDetailModal(data.key);
+    wrap.appendChild(div);
+  });
+
+  // 鼠标拖拽横向滚动
+  const outer = document.querySelector('.timeline-outer');
+  let isDown = false, startX = 0, scrollLeft = 0;
+
+  outer.onmousedown = (e)=>{
+    isDown = true;
+    startX = e.pageX - outer.offsetLeft;
+    scrollLeft = outer.scrollLeft;
+  };
+  outer.onmouseleave = ()=>isDown = false;
+  outer.onmouseup = ()=>isDown = false;
+  outer.onmousemove = (e)=>{
+    if(!isDown) return;
+    e.preventDefault();
+    const x = e.pageX - outer.offsetLeft;
+    outer.scrollLeft = scrollLeft - (x - startX) * 1.2;
+  };
+}
+
+// ===================== 详情弹窗 =====================
+function openDetailModal(key){
+  const data = designData.find(d=>d.key===key);
+  const modalBox = document.getElementById('modalContainer');
+  modalBox.classList.remove('hidden');
+  modalBox.innerHTML = `
+    <div class="modal" onclick="closeModal()">
+      <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xl font-serif text-accentBrown">${data.name}</h2>
+          <button onclick="closeModal()" class="text-accentBrown text-xl">✕</button>
+        </div>
+        <div class="mt-4 space-y-3 text-sm">
+          <div><span class="font-semibold">年代：</span>${data.year}</div>
+          <div><span class="font-semibold">一句话简介：</span>${data.summary}</div>
+          <div><span class="font-semibold">时代背景：</span>${data.background}</div>
+          <div><span class="font-semibold">核心主张：</span>${data.idea}</div>
+          <div><span class="font-semibold">风格特征：</span>${data.feature}</div>
+          <div><span class="font-semibold">代表人物：</span>${data.people}</div>
+          <div><span class="font-semibold">经典作品：</span>${data.work}</div>
+          <div><span class="font-semibold">传承关系：</span>${data.relation}</div>
+        </div>
+        <button onclick="unlockBadge('${data.key}');closeModal()" class="mt-4 px-4 py-2 rounded-full bg-accentBrown text-white text-sm">解锁本流派徽章</button>
+      </div>
+    </div>
+  `;
+}
+function closeModal(){document.getElementById('modalContainer').classList.add('hidden')}
+
+// ===================== 作品图鉴 =====================
+function renderGallery(){
+  const wrap = document.getElementById('galleryWrap');
+  wrap.innerHTML='';
+  designData.forEach(item=>{
+    const card = document.createElement('div');
+    card.className='gallery-card';
+    card.innerHTML=`
+      <h3 class="font-serif text-accentBrown">${item.name}｜${item.year}</h3>
+      <p class="text-sm mt-2 text-textMain/80">代表作品：${item.work}</p>
+    `;
+    card.onclick=()=>openDetailModal(item.key);
+    wrap.appendChild(card);
+  })
+}
+
+// ===================== 流派对比台 =====================
+function initCompareSelect(){
+  const selA = document.getElementById('compareA');
+  const selB = document.getElementById('compareB');
+  selA.innerHTML='';selB.innerHTML='';
+  designData.forEach(d=>{
+    selA.innerHTML += `<option value="${d.key}">${d.name}</option>`;
+    selB.innerHTML += `<option value="${d.key}">${d.name}</option>`;
+  })
+  renderCompare();
+}
+function renderCompare(){
+  const a = designData.find(d=>d.key===document.getElementById('compareA').value);
+  const b = designData.find(d=>d.key===document.getElementById('compareB').value);
+  document.getElementById('compareBox').innerHTML = `
+    <table class="w-full text-sm">
+      <tr class="border-b"><td class="py-2 font-semibold w-1/3">项目</td><td class="py-2 w-1/3">${a.name}</td><td class="py-2 w-1/3">${b.name}</td></tr>
+      <tr class="border-b"><td class="py-2">年代</td><td class="py-2">${a.year}</td><td class="py-2">${b.year}</td></tr>
+      <tr class="border-b"><td class="py-2">核心主张</td><td class="py-2">${a.idea}</td><td class="py-2">${b.idea}</td></tr>
+      <tr class="border-b"><td class="py-2">风格特征</td><td class="py-2">${a.feature}</td><td class="py-2">${b.feature}</td></tr>
+      <tr class="border-b"><td class="py-2">代表人物</td><td class="py-2">${a.people}</td><td class="py-2">${b.people}</td></tr>
+      <tr class="border-b"><td class="py-2">经典作品</td><td class="py-2">${a.work}</td><td class="py-2">${b.work}</td></tr>
+    </table>
+  `;
+}
+
+// ===================== 双人对战 =====================
+let battleCtx, battleRunning = false;
+let p1 = {x:100,y:280,hp:100,maxHp:100,name:"格罗皮乌斯（包豪斯）"};
+let p2 = {x:660,y:280,hp:100,maxHp:100,name:"里特维尔德（风格派）"};
+let bullets = [];
+let currentBattleQ = null;
+
+function initBattleCanvas(){
+  const canvas = document.getElementById('battleCanvas');
+  battleCtx = canvas.getContext('2d');
+  p1.hp=100;p2.hp=100;bullets=[];battleRunning=true;
+  document.getElementById('battleTip').innerText = "玩家1按Q攻击｜玩家2按P攻击，答对才能发射炮弹！";
+  document.getElementById('battleQuestionBox').classList.add('hidden');
+  battleLoop();
+}
+
+function battleLoop(){
+  if(!battleRunning) return;
+  battleCtx.fillStyle="#FFF9E3";
+  battleCtx.fillRect(0,0,800,420);
+
+  // 血条
+  battleCtx.fillStyle="#ddd";battleCtx.fillRect(60,30,140,14);
+  battleCtx.fillStyle="#B8D4B0";battleCtx.fillRect(60,30,140*(p1.hp/p1.maxHp),14);
+  battleCtx.fillStyle="#ddd";battleCtx.fillRect(600,30,140,14);
+  battleCtx.fillStyle="#F2C894";battleCtx.fillRect(600,30,140*(p2.hp/p2.maxHp),14);
+  battleCtx.fillStyle="#3A3A3A";battleCtx.font="14px serif";
+  battleCtx.fillText(p1.name,60,24);
+  battleCtx.fillText(p2.name,600,24);
+
+  // 角色
+  battleCtx.fillStyle="#9A6B43";
+  battleCtx.fillRect(p1.x,p1.y,40,60);
+  battleCtx.fillRect(p2.x,p2.y,40,60);
+
+  // 炮弹
+  battleCtx.fillStyle="#9A6B43";
+  bullets.forEach((b,i)=>{
+    b.x += b.vx;
+    battleCtx.beginPath();battleCtx.arc(b.x,b.y,8,0,Math.PI*2);battleCtx.fill();
+    if(b.x<0||b.x>800) bullets.splice(i,1);
+    if(b.x>p2.x && b.x<p2.x+40 && b.y>p2.y && b.y<p2.y+60){
+      p2.hp -=20;bullets.splice(i,1);
+      document.getElementById('battleTip').innerText = "命中！里特维尔德受到伤害！";
+    }
+    if(b.x>p1.x && b.x<p1.x+40 && b.y>p1.y && b.y<p1.y+60){
+      p1.hp -=20;bullets.splice(i,1);
+      document.getElementById('battleTip').innerText = "命中！格罗皮乌斯受到伤害！";
+    }
+  });
+
+  if(p1.hp<=0){battleRunning=false;document.getElementById('battleTip').innerText="🏆 里特维尔德胜利！";return}
+  if(p2.hp<=0){battleRunning=false;document.getElementById('battleTip').innerText="🏆 格罗皮乌斯胜利！";return}
+  requestAnimationFrame(battleLoop);
+}
+
+window.addEventListener('keydown',(e)=>{
+  if(e.key.toLowerCase()==='q' && battleRunning && !currentBattleQ){
+    currentBattleQ = questionBank[Math.floor(Math.random()*questionBank.length)];
+    showBattleQuestion(currentBattleQ,1);
+  }
+  if(e.key.toLowerCase()==='p' && battleRunning && !currentBattleQ){
+    currentBattleQ = questionBank[Math.floor(Math.random()*questionBank.length)];
+    showBattleQuestion(currentBattleQ,2);
+  }
+});
+
+function showBattleQuestion(q,player){
+  const box = document.getElementById('battleQuestionBox');
+  box.classList.remove('hidden');
+  document.getElementById('qText').innerText = q.q;
+  const optWrap = document.getElementById('qOptions');
+  optWrap.innerHTML='';
+  q.opt.forEach((opt,i)=>{
+    const btn = document.createElement('button');
+    btn.className="w-full px-3 py-2 rounded-lg border border-accentBrown/40 hover:bg-accentBrown/10 text-left text-sm";
+    btn.innerText = opt;
+    btn.onclick = ()=>{
+      if(i===q.ans){
+        document.getElementById('battleTip').innerText="✅ 回答正确！炮弹发射！";
+        bullets.push({x:player===1?p1.x+40:p2.x,y:player===1?p1.y+30:p2.y+30,vx:player===1?6:-6});
+        unlockBadge(q.belong);
+      }else{
+        document.getElementById('battleTip').innerText="❌ 回答错误，炮弹哑火！";
+      }
+      box.classList.add('hidden');
+      currentBattleQ=null;
+    }
+    optWrap.appendChild(btn);
+  });
+}
+
+// =====================【重写：冰火人设计史大冒险，其余代码完全不动】=====================
+let platCtx, platRunning = false;
+let blue = {x:60,y:300,w:34,h:44,vx:0,vy:0,onGround:false,color:'#4385F5'};
+let red = {x:120,y:300,w:34,h:44,vx:0,vy:0,onGround:false,color:'#E2574B'};
+let platKeys = {};
+let currentPlatQ = null;
+let scrollX = 0;
+let levelLength = 5200;
+let goalX = levelLength - 140;
+let gems = [], spikes = [], waterPlatforms = [], firePlatforms = [], doors = [], keysItem = [];
+let hasKey = false;
+let platPlatforms = [];
+
+function initPlatformCanvas(){
+  const canvas = document.getElementById('platformCanvas');
+  platCtx = canvas.getContext('2d');
+  blue = {x:60,y:300,w:34,h:44,vx:0,vy:0,onGround:false,color:'#4385F5'};
+  red = {x:120,y:300,w:34,h:44,vx:0,vy:0,onGround:false,color:'#E2574B'};
+  scrollX = 0;
+  platRunning = true;
+  currentPlatQ = null;
+  hasKey = false;
+  gems = [];
+  spikes = [];
+  waterPlatforms = [];
+  firePlatforms = [];
+  doors = [];
+  keysItem = [];
+
+  const ground = { x: 0, y: 380, w: levelLength, h: 40 };
+  const platforms = [
+    { x: 200, y: 320, w: 120, h: 20 },{ x: 380, y: 270, w: 120, h: 20 },{ x: 560, y: 220, w: 120, h: 20 },
+    { x: 740, y: 270, w: 120, h: 20 },{ x: 920, y: 320, w: 120, h: 20 },{ x: 1120, y: 260, w: 140, h: 20 },
+    { x: 1340, y: 210, w: 140, h: 20 },{ x: 1560, y: 260, w: 140, h: 20 },{ x: 1780, y: 310, w: 140, h: 20 },
+    { x: 2000, y: 250, w: 160, h: 20 },{ x: 2240, y: 200, w: 160, h: 20 },{ x: 2480, y: 250, w: 160, h: 20 },
+    { x: 2720, y: 300, w: 160, h: 20 },{ x: 2960, y: 240, w: 180, h: 20 },{ x: 3220, y: 190, w: 180, h: 20 },
+    { x: 3480, y: 240, w: 180, h: 20 },{ x: 3740, y: 290, w: 180, h: 20 },{ x: 4000, y: 230, w: 200, h: 20 },
+    { x: 4260, y: 180, w: 200, h: 20 },{ x: 4520, y: 240, w: 200, h: 20 },{ x: 4780, y: 300, w: 200, h: 20 }
+  ];
+  waterPlatforms = [
+    { x: 640, y: 340, w: 160, h: 40 },{ x: 1260, y: 340, w: 160, h: 40 },
+    { x: 2120, y: 340, w: 180, h: 40 },{ x: 3100, y: 340, w: 180, h: 40 },{ x: 4120, y: 340, w: 200, h: 40 }
+  ];
+  firePlatforms = [
+    { x: 820, y: 340, w: 160, h: 40 },{ x: 1440, y: 340, w: 160, h: 40 },
+    { x: 2320, y: 340, w: 180, h: 40 },{ x: 3300, y: 340, w: 180, h: 40 },{ x: 4340, y: 340, w: 200, h: 40 }
+  ];
+  spikes = [
+    { x: 340, y: 360, w: 40, h: 20 },{ x: 1060, y: 360, w: 40, h: 20 },{ x: 1700, y: 360, w: 40, h: 20 },
+    { x: 2640, y: 360, w: 40, h: 20 },{ x: 3640, y: 360, w: 40, h: 20 },{ x: 4640, y: 360, w: 40, h: 20 }
+  ];
+  gems = [
+    { x: 420, y: 240, got: false, q: questionBank[0] },{ x: 600, y: 190, got: false, q: questionBank[1] },
+    { x: 960, y: 290, got: false, q: questionBank[2] },{ x: 1400, y: 180, got: false, q: questionBank[3] },
+    { x: 1820, y: 280, got: false, q: questionBank[4] },{ x: 2280, y: 170, got: false, q: questionBank[5] },
+    { x: 2760, y: 270, got: false, q: questionBank[6] },{ x: 3260, y: 160, got: false, q: questionBank[7] },
+    { x: 3780, y: 260, got: false, q: questionBank[8] },{ x: 4300, y: 150, got: false, q: questionBank[9] }
+  ];
+  keysItem = [{ x: 2280, y: 170, got: false },{ x: 4300, y: 150, got: false }];
+  doors = [{ x: goalX, y: 300, w: 50, h: 80, open: false }];
+  platPlatforms = [ground, ...platforms];
+
+  document.getElementById('platformTip').innerText = '🔵蓝冰娃：A/D移动 W跳跃；🔴红火娃：← →移动 ↑跳跃｜蓝走水、红走火焰，收集钻石答题，拿钥匙开门通关！';
+  document.getElementById('platformQuestionBox').classList.add('hidden');
+  platLoop();
+}
+function closePlatPopup(){
+  document.getElementById('platformQuestionBox').classList.add('hidden');
+  currentPlatQ = null;
+}
+function platLoop(){
+  if(!platRunning) return;
+  platCtx.fillStyle='#FFF9E3';
+  platCtx.fillRect(0,0,800,420);
+
+  const targetScrollX = (blue.x + red.x) / 2 - 350;
+  scrollX += (targetScrollX - scrollX) * 0.08;
+  if(scrollX < 0) scrollX = 0;
+  if(scrollX > levelLength - 800) scrollX = levelLength - 800;
+
+  //蓝冰娃控制
+  if(platKeys['a'] || platKeys['A']) blue.vx = -4;
+  else if(platKeys['d'] || platKeys['D']) blue.vx = 4;
+  else blue.vx = 0;
+  if((platKeys['w'] || platKeys['W']) && blue.onGround){ blue.vy = -13; blue.onGround = false; }
+
+  //红火娃控制
+  if(platKeys['ArrowLeft']) red.vx = -4;
+  else if(platKeys['ArrowRight']) red.vx = 4;
+  else red.vx = 0;
+  if(platKeys['ArrowUp'] && red.onGround){ red.vy = -13; red.onGround = false; }
+
+  updatePlayer(blue);
+  updatePlayer(red);
+  blue.onGround = false;
+  red.onGround = false;
+
+  platPlatforms.forEach(p=>{drawPlatform(p);platformCollide(blue,p);platformCollide(red,p);})
+  waterPlatforms.forEach(w=>{
+    drawWater(w);platformCollide(blue,w);
+    if(rectOverlap(red,w)) resetPlatPlayers("红火娃不能踩水面！回到起点");
+  })
+  firePlatforms.forEach(f=>{
+    drawFire(f);platformCollide(red,f);
+    if(rectOverlap(blue,f)) resetPlatPlayers("蓝冰娃不能踩火焰！回到起点");
+  })
+  spikes.forEach(sp=>{
+    drawSpike(sp);
+    if(rectOverlap(blue,sp)||rectOverlap(red,sp)) resetPlatPlayers("碰到尖刺！重新来");
+  })
+
+  gems.forEach(g=>{
+    if(!g.got){
+      const gx = g.x - scrollX;
+      if(gx > -40 && gx < 840){
+        platCtx.fillStyle="#43b8ff";
+        platCtx.beginPath();platCtx.arc(gx,g.y,14,0,Math.PI*2);platCtx.fill();
+        platCtx.strokeStyle="#2277bb";platCtx.lineWidth=2;platCtx.stroke();
+      }
+      if(rectOverlap(blue,g)||rectOverlap(red,g)){
+        g.got=true;
+        currentPlatQ=g.q;
+        document.getElementById('pqText').innerText = g.q.q;
+        const optWrap = document.getElementById('pqOptions');optWrap.innerHTML='';
+        g.q.opt.forEach((opt,i)=>{
+          const btn=document.createElement('button');
+          btn.className='w-full px-3 py-2 rounded-lg border border-accentBrown/40 hover:bg-accentBrown/10 text-left text-sm';
+          btn.innerText=opt;
+          btn.onclick=()=>{
+            if(i===g.q.ans) document.getElementById('platformTip').innerText='✅答对！继续前进';
+            else document.getElementById('platformTip').innerText='❌答错啦，继续探索';
+            unlockBadge(g.q.belong);
+            closePlatPopup();
+          }
+          optWrap.appendChild(btn);
+        })
+        document.getElementById
+<!-- （注：内容由AI生成） -->
